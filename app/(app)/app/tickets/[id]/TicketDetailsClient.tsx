@@ -7,7 +7,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { TicketPriority, TicketStatus } from "@/lib/tickets/types";
+import type {
+  TicketAiOutput,
+  TicketPriority,
+  TicketStatus,
+} from "@/lib/tickets/types";
 import { useTicketsStore } from "@/store/useTicketsStore";
 
 const statusVariantMap: Record<
@@ -58,9 +62,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   );
   const isHydrated = useTicketsStore((state) => state.isHydrated);
   const hydrateTickets = useTicketsStore((state) => state.hydrateTickets);
+  const saveAiOutput = useTicketsStore((state) => state.saveAiOutput);
   const [aiState, setAiState] = useState<AiState>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
-  const [aiOutput, setAiOutput] = useState<AiOutput | null>(null);
 
   useEffect(() => {
     hydrateTickets();
@@ -69,7 +73,6 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   useEffect(() => {
     setAiState("idle");
     setAiError(null);
-    setAiOutput(null);
   }, [id]);
 
   const handleGenerateAi = async () => {
@@ -112,7 +115,20 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
       }
 
       const data = (await response.json()) as AiOutput;
-      setAiOutput(data);
+      const persistedOutput: TicketAiOutput = {
+        customerReply: data.customerReply,
+        qaSummary: data.qaSummary,
+        followUpQuestions: data.followUpQuestions,
+        generatedAt: new Date().toISOString(),
+        model: "gpt-5-nano",
+      };
+      const updatedTicket = saveAiOutput(ticket.id, persistedOutput);
+      if (!updatedTicket) {
+        setAiError("Failed to persist AI output. Please retry.");
+        setAiState("error");
+        return;
+      }
+
       setAiState("success");
     } catch {
       setAiError("Failed to generate AI output.");
@@ -223,7 +239,40 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
           </div>
         </div>
       </Card>
-      {aiState === "idle" ? (
+      {ticket.aiOutput ? (
+        <div className="grid gap-4">
+          <Card className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-900">
+                Customer Reply
+              </p>
+              <p className="whitespace-pre-line text-sm text-slate-600">
+                {ticket.aiOutput.customerReply}
+              </p>
+            </div>
+          </Card>
+          <Card className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-900">QA Summary</p>
+              <p className="whitespace-pre-line text-sm text-slate-600">
+                {ticket.aiOutput.qaSummary}
+              </p>
+            </div>
+          </Card>
+          <Card className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-900">
+                Follow-up Questions
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
+                {ticket.aiOutput.followUpQuestions.map((question) => (
+                  <li key={question}>{question}</li>
+                ))}
+              </ul>
+            </div>
+          </Card>
+        </div>
+      ) : aiState === "idle" ? (
         <Card className="p-6">
           <EmptyState
             title="AI output pending"
@@ -250,40 +299,6 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
             action={<Button onClick={handleGenerateAi}>Retry</Button>}
           />
         </Card>
-      ) : null}
-      {aiState === "success" && aiOutput ? (
-        <div className="grid gap-4">
-          <Card className="p-6">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">
-                Customer Reply
-              </p>
-              <p className="whitespace-pre-line text-sm text-slate-600">
-                {aiOutput.customerReply}
-              </p>
-            </div>
-          </Card>
-          <Card className="p-6">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">QA Summary</p>
-              <p className="whitespace-pre-line text-sm text-slate-600">
-                {aiOutput.qaSummary}
-              </p>
-            </div>
-          </Card>
-          <Card className="p-6">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">
-                Follow-up Questions
-              </p>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
-                {aiOutput.followUpQuestions.map((question) => (
-                  <li key={question}>{question}</li>
-                ))}
-              </ul>
-            </div>
-          </Card>
-        </div>
       ) : null}
     </div>
   );

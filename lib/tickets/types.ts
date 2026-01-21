@@ -20,6 +20,14 @@ export type TicketEnvironment = {
   userAgent?: string;
 };
 
+export type TicketAiOutput = {
+  customerReply: string;
+  qaSummary: string;
+  followUpQuestions: string[];
+  generatedAt: string;
+  model: string;
+};
+
 export type Ticket = {
   id: string;
   title: string;
@@ -34,6 +42,7 @@ export type Ticket = {
   environment: TicketEnvironment;
   createdAt: string;
   updatedAt: string;
+  aiOutput?: TicketAiOutput;
 };
 
 export type CreateTicketInput = {

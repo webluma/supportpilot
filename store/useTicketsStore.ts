@@ -8,7 +8,12 @@ import {
   getTickets,
   updateTicket as updateTicketRecord,
 } from "@/lib/tickets/repository";
-import type { CreateTicketInput, Ticket, TicketStatus } from "@/lib/tickets/types";
+import type {
+  CreateTicketInput,
+  Ticket,
+  TicketAiOutput,
+  TicketStatus,
+} from "@/lib/tickets/types";
 
 type TicketsState = {
   tickets: Ticket[];
@@ -17,6 +22,7 @@ type TicketsState = {
   createTicket: (input: CreateTicketInput) => Ticket;
   updateTicket: (id: string, patch: Partial<Ticket>) => Ticket | null;
   updateTicketStatus: (id: string, status: TicketStatus) => Ticket | null;
+  saveAiOutput: (id: string, output: TicketAiOutput) => Ticket | null;
   deleteTicket: (id: string) => boolean;
   clearAllTickets: () => void;
 };
@@ -58,6 +64,22 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
   },
   updateTicketStatus: (id, status) => {
     return get().updateTicket(id, { status });
+  },
+  saveAiOutput: (id, output) => {
+    const updatedTicket = updateTicketRecord(id, {
+      aiOutput: output,
+      status: "Resolved",
+    });
+    if (!updatedTicket) {
+      return null;
+    }
+
+    set((state) => ({
+      tickets: state.tickets.map((ticket) =>
+        ticket.id === id ? updatedTicket : ticket,
+      ),
+    }));
+    return updatedTicket;
   },
   deleteTicket: (id) => {
     const didDelete = deleteTicketRecord(id);

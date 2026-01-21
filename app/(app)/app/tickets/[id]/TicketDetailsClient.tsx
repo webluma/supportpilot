@@ -63,6 +63,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const isHydrated = useTicketsStore((state) => state.isHydrated);
   const hydrateTickets = useTicketsStore((state) => state.hydrateTickets);
   const saveAiOutput = useTicketsStore((state) => state.saveAiOutput);
+  const updateTicketStatus = useTicketsStore(
+    (state) => state.updateTicketStatus,
+  );
   const [aiState, setAiState] = useState<AiState>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -136,6 +139,13 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     }
   };
 
+  const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!ticket || aiState === "loading") {
+      return;
+    }
+    updateTicketStatus(id, event.target.value as TicketStatus);
+  };
+
   if (!isHydrated) {
     return (
       <div className="space-y-6">
@@ -195,6 +205,26 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
       </Card>
       <Card className="p-6">
         <div className="space-y-4">
+          <div className="space-y-2">
+            <label
+              className="text-sm font-semibold text-slate-900"
+              htmlFor="ticketStatus"
+            >
+              Status
+            </label>
+            <select
+              id="ticketStatus"
+              name="ticketStatus"
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white sm:max-w-xs"
+              value={ticket.status}
+              onChange={handleStatusChange}
+              disabled={aiState === "loading"}
+            >
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">

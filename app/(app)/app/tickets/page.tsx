@@ -30,7 +30,16 @@ const priorityVariantMap: Record<
   Urgent: "warning",
 };
 
+const priorityRank: Record<TicketPriority, number> = {
+  Urgent: 4,
+  High: 3,
+  Medium: 2,
+  Low: 1,
+};
+
 type StatusFilter = "All" | TicketStatus;
+
+type SortOption = "newest" | "oldest" | "priority";
 
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
@@ -47,6 +56,13 @@ export default function TicketsPage() {
     statusFromQuery === "Resolved"
       ? statusFromQuery
       : "All";
+
+  const searchValue = searchParams.get("q") ?? "";
+  const sortFromQuery = searchParams.get("sort");
+  const sortOption: SortOption =
+    sortFromQuery === "oldest" || sortFromQuery === "priority"
+      ? sortFromQuery
+      : "newest";
 
   useEffect(() => {
     hydrateTickets();
@@ -69,22 +85,102 @@ export default function TicketsPage() {
   }, [tickets]);
 
   const filteredTickets = useMemo(() => {
-    if (activeFilter === "All") {
-      return tickets;
+    let list = tickets;
+    if (activeFilter !== "All") {
+      list = list.filter((ticket) => ticket.status === activeFilter);
     }
-    return tickets.filter((ticket) => ticket.status === activeFilter);
-  }, [tickets, activeFilter]);
+    const normalizedSearch = searchValue.trim().toLowerCase();
+    if (normalizedSearch) {
+      list = list.filter((ticket) => {
+        const haystack = `${ticket.title} ${ticket.description}`.toLowerCase();
+        return haystack.includes(normalizedSearch);
+      });
+    }
+    return list;
+  }, [tickets, activeFilter, searchValue]);
 
-  const handleFilterChange = (status: StatusFilter) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (status === "All") {
-      params.delete("status");
-    } else {
-      params.set("status", status);
+  const sortedTickets = useMemo(() => {
+    const list = [...filteredTickets];
+    if (sortOption === "oldest") {
+      list.sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      return list;
     }
+    if (sortOption === "priority") {
+      list.sort((a, b) => {
+        const rankDiff = priorityRank[b.priority] - priorityRank[a.priority];
+        if (rankDiff !== 0) {
+          return rankDiff;
+        }
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
+      return list;
+    }
+
+    list.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    return list;
+  }, [filteredTickets, sortOption]);
+
+  const updateQuery = (next: {
+    status?: StatusFilter;
+    q?: string;
+    sort?: SortOption;
+  }) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (next.status !== undefined) {
+      if (next.status === "All") {
+        params.delete("status");
+      } else {
+        params.set("status", next.status);
+      }
+    }
+
+    if (next.q !== undefined) {
+      const trimmed = next.q.trim();
+      if (!trimmed) {
+        params.delete("q");
+      } else {
+        params.set("q", trimmed);
+      }
+    }
+
+    if (next.sort !== undefined) {
+      if (next.sort === "newest") {
+        params.delete("sort");
+      } else {
+        params.set("sort", next.sort);
+      }
+    }
+
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   };
+
+  const handleFilterChange = (status: StatusFilter) => {
+    updateQuery({ status });
+  };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    updateQuery({ q: event.target.value });
+  };
+
+  const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    updateQuery({ sort: event.target.value as SortOption });
+  };
+
+  const handleClearSearch = () => {
+    updateQuery({ q: "" });
+  };
+
+  const hasSearch = searchValue.trim().length > 0;
 
   return (
     <div className="min-w-0 w-full max-w-full overflow-x-hidden space-y-6">
@@ -112,6 +208,38 @@ export default function TicketsPage() {
           )
         )}
       </div>
+      <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
+        <div className="w-full min-w-0 sm:max-w-sm">
+          <label className="sr-only" htmlFor="ticketSearch">
+            Search tickets
+          </label>
+          <input
+            id="ticketSearch"
+            name="ticketSearch"
+            type="text"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
+            placeholder="Search tickets..."
+            value={searchValue}
+            onChange={handleSearchChange}
+          />
+        </div>
+        <div className="w-full sm:w-48">
+          <label className="sr-only" htmlFor="ticketSort">
+            Sort tickets
+          </label>
+          <select
+            id="ticketSort"
+            name="ticketSort"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
+            value={sortOption}
+            onChange={handleSortChange}
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="priority">Priority</option>
+          </select>
+        </div>
+      </div>
       {!isHydrated ? (
         <Card className="p-6">
           <EmptyState
@@ -119,21 +247,31 @@ export default function TicketsPage() {
             description="Fetching the latest ticket activity for this workspace."
           />
         </Card>
-      ) : filteredTickets.length === 0 ? (
+      ) : sortedTickets.length === 0 ? (
         <Card className="p-6">
           <EmptyState
             title="No tickets found"
-            description="No tickets match the current filter. Try another status or create a new ticket."
+            description={
+              hasSearch
+                ? "No tickets match your search. Try a different query or clear the search."
+                : "No tickets match the current filter. Try another status or create a new ticket."
+            }
             action={
-              <ButtonLink href="/app/tickets/new">
-                Create a new ticket
-              </ButtonLink>
+              hasSearch ? (
+                <Button variant="secondary" onClick={handleClearSearch}>
+                  Clear search
+                </Button>
+              ) : (
+                <ButtonLink href="/app/tickets/new">
+                  Create a new ticket
+                </ButtonLink>
+              )
             }
           />
         </Card>
       ) : (
         <div className="min-w-0 grid gap-4">
-          {filteredTickets.map((ticket) => (
+          {sortedTickets.map((ticket) => (
             <Card
               key={ticket.id}
               className="min-w-0 w-full max-w-full box-border overflow-hidden p-3 sm:p-6"

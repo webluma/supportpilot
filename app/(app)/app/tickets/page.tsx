@@ -292,6 +292,9 @@ export default function TicketsPage() {
                   <Badge variant={priorityVariantMap[ticket.priority]}>
                     {ticket.priority} priority
                   </Badge>
+                  <Badge variant={ticket.aiOutput ? "success" : "default"}>
+                    {ticket.aiOutput ? "Answered" : "Pending"}
+                  </Badge>
                 </div>
                 <div className="w-full pt-2">
                   <ButtonLink

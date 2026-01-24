@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
@@ -56,6 +56,38 @@ type AiErrorResponse = {
 
 type AiState = "idle" | "loading" | "success" | "error";
 
+type CopyKey = "customer" | "qa" | "followups";
+
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fallback below.
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const success = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return success;
+  } catch {
+    return false;
+  }
+};
+
 export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const ticket = useTicketsStore((state) =>
     state.tickets.find((item) => item.id === id),
@@ -68,6 +100,10 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   );
   const [aiState, setAiState] = useState<AiState>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<CopyKey | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCopyKeyRef = useRef<CopyKey | null>(null);
 
   useEffect(() => {
     hydrateTickets();
@@ -77,6 +113,14 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     setAiState("idle");
     setAiError(null);
   }, [id]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleGenerateAi = async () => {
     if (!ticket || aiState === "loading") {
@@ -137,6 +181,28 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
       setAiError("Failed to generate AI output.");
       setAiState("error");
     }
+  };
+
+  const handleCopy = async (key: CopyKey, text: string) => {
+    lastCopyKeyRef.current = key;
+    setCopyError(null);
+
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
+
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopiedKey(key);
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopiedKey(null);
+      }, 1500);
+      return;
+    }
+
+    setCopiedKey(null);
+    setCopyError("Copy failed. Please try again.");
   };
 
   const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -273,9 +339,29 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
         <div className="grid gap-4">
           <Card className="p-6">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">
-                Customer Reply
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Customer Reply
+                </p>
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      handleCopy("customer", ticket.aiOutput.customerReply)
+                    }
+                  >
+                    {copiedKey === "customer" ? "Copied!" : "Copy"}
+                  </Button>
+                  {copyError &&
+                  lastCopyKeyRef.current === "customer" ? (
+                    <span className="text-xs text-rose-600">
+                      Copy failed. Please try again.
+                    </span>
+                  ) : null}
+                </div>
+              </div>
               <p className="whitespace-pre-line text-sm text-slate-600">
                 {ticket.aiOutput.customerReply}
               </p>
@@ -283,7 +369,28 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
           </Card>
           <Card className="p-6">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">QA Summary</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  QA Summary
+                </p>
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      handleCopy("qa", ticket.aiOutput.qaSummary)
+                    }
+                  >
+                    {copiedKey === "qa" ? "Copied!" : "Copy"}
+                  </Button>
+                  {copyError && lastCopyKeyRef.current === "qa" ? (
+                    <span className="text-xs text-rose-600">
+                      Copy failed. Please try again.
+                    </span>
+                  ) : null}
+                </div>
+              </div>
               <p className="whitespace-pre-line text-sm text-slate-600">
                 {ticket.aiOutput.qaSummary}
               </p>
@@ -291,9 +398,33 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
           </Card>
           <Card className="p-6">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">
-                Follow-up Questions
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Follow-up Questions
+                </p>
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      handleCopy(
+                        "followups",
+                        ticket.aiOutput.followUpQuestions
+                          .map((question) => `- ${question}`)
+                          .join("\n"),
+                      )
+                    }
+                  >
+                    {copiedKey === "followups" ? "Copied!" : "Copy"}
+                  </Button>
+                  {copyError && lastCopyKeyRef.current === "followups" ? (
+                    <span className="text-xs text-rose-600">
+                      Copy failed. Please try again.
+                    </span>
+                  ) : null}
+                </div>
+              </div>
               <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
                 {ticket.aiOutput.followUpQuestions.map((question) => (
                   <li key={question}>{question}</li>

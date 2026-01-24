@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { TicketPriority, TicketStatus } from "@/lib/tickets/types";
+import type {
+  TicketCategory,
+  TicketPriority,
+  TicketStatus,
+} from "@/lib/tickets/types";
 import { useTicketsStore } from "@/store/useTicketsStore";
 
 const statusVariantMap: Record<
@@ -37,9 +41,25 @@ const priorityRank: Record<TicketPriority, number> = {
   Low: 1,
 };
 
+const categoryOptions: TicketCategory[] = [
+  "Bug",
+  "Performance",
+  "Billing",
+  "Login",
+  "UI",
+  "Feature Request",
+  "Other",
+];
+
+const priorityOptions: TicketPriority[] = ["Low", "Medium", "High", "Urgent"];
+
 type StatusFilter = "All" | TicketStatus;
 
 type SortOption = "newest" | "oldest" | "priority";
+
+type CategoryFilter = "All categories" | TicketCategory;
+
+type PriorityFilter = "All priorities" | TicketPriority;
 
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
@@ -56,6 +76,20 @@ export default function TicketsPage() {
     statusFromQuery === "Resolved"
       ? statusFromQuery
       : "All";
+
+  const categoryFromQuery = searchParams.get("category");
+  const activeCategory: CategoryFilter = categoryOptions.includes(
+    categoryFromQuery as TicketCategory
+  )
+    ? (categoryFromQuery as TicketCategory)
+    : "All categories";
+
+  const priorityFromQuery = searchParams.get("priority");
+  const activePriority: PriorityFilter = priorityOptions.includes(
+    priorityFromQuery as TicketPriority
+  )
+    ? (priorityFromQuery as TicketPriority)
+    : "All priorities";
 
   const searchValue = searchParams.get("q") ?? "";
   const sortFromQuery = searchParams.get("sort");
@@ -88,6 +122,12 @@ export default function TicketsPage() {
     let list = tickets;
     if (activeFilter !== "All") {
       list = list.filter((ticket) => ticket.status === activeFilter);
+    }
+    if (activeCategory !== "All categories") {
+      list = list.filter((ticket) => ticket.category === activeCategory);
+    }
+    if (activePriority !== "All priorities") {
+      list = list.filter((ticket) => ticket.priority === activePriority);
     }
     const normalizedSearch = searchValue.trim().toLowerCase();
     if (normalizedSearch) {
@@ -130,6 +170,8 @@ export default function TicketsPage() {
 
   const updateQuery = (next: {
     status?: StatusFilter;
+    category?: CategoryFilter;
+    priority?: PriorityFilter;
     q?: string;
     sort?: SortOption;
   }) => {
@@ -140,6 +182,22 @@ export default function TicketsPage() {
         params.delete("status");
       } else {
         params.set("status", next.status);
+      }
+    }
+
+    if (next.category !== undefined) {
+      if (next.category === "All categories") {
+        params.delete("category");
+      } else {
+        params.set("category", next.category);
+      }
+    }
+
+    if (next.priority !== undefined) {
+      if (next.priority === "All priorities") {
+        params.delete("priority");
+      } else {
+        params.set("priority", next.priority);
       }
     }
 
@@ -166,6 +224,20 @@ export default function TicketsPage() {
 
   const handleFilterChange = (status: StatusFilter) => {
     updateQuery({ status });
+  };
+
+  const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    updateQuery({
+      category: value ? (value as TicketCategory) : "All categories",
+    });
+  };
+
+  const handlePriorityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    updateQuery({
+      priority: value ? (value as TicketPriority) : "All priorities",
+    });
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,6 +309,46 @@ export default function TicketsPage() {
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="priority">Priority</option>
+          </select>
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:gap-4">
+        <div className="w-full sm:w-56">
+          <label className="sr-only" htmlFor="ticketCategory">
+            Filter by category
+          </label>
+          <select
+            id="ticketCategory"
+            name="ticketCategory"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
+            value={activeCategory === "All categories" ? "" : activeCategory}
+            onChange={handleCategoryChange}
+          >
+            <option value="">All categories</option>
+            {categoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="w-full sm:w-48">
+          <label className="sr-only" htmlFor="ticketPriority">
+            Filter by priority
+          </label>
+          <select
+            id="ticketPriority"
+            name="ticketPriority"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
+            value={activePriority === "All priorities" ? "" : activePriority}
+            onChange={handlePriorityChange}
+          >
+            <option value="">All priorities</option>
+            {priorityOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
           </select>
         </div>
       </div>

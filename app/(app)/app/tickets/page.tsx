@@ -41,6 +41,9 @@ const priorityRank: Record<TicketPriority, number> = {
   Low: 1,
 };
 
+const ALL_CATEGORIES = "all";
+const ALL_PRIORITIES = "all";
+
 const categoryOptions: TicketCategory[] = [
   "Bug",
   "Performance",
@@ -78,18 +81,20 @@ export default function TicketsPage() {
       : "All";
 
   const categoryFromQuery = searchParams.get("category");
-  const activeCategory: CategoryFilter = categoryOptions.includes(
-    categoryFromQuery as TicketCategory
-  )
-    ? (categoryFromQuery as TicketCategory)
-    : "All categories";
+  const activeCategory: CategoryFilter =
+    !categoryFromQuery || categoryFromQuery === ALL_CATEGORIES
+      ? "All categories"
+      : categoryOptions.includes(categoryFromQuery as TicketCategory)
+        ? (categoryFromQuery as TicketCategory)
+        : "All categories";
 
   const priorityFromQuery = searchParams.get("priority");
-  const activePriority: PriorityFilter = priorityOptions.includes(
-    priorityFromQuery as TicketPriority
-  )
-    ? (priorityFromQuery as TicketPriority)
-    : "All priorities";
+  const activePriority: PriorityFilter =
+    !priorityFromQuery || priorityFromQuery === ALL_PRIORITIES
+      ? "All priorities"
+      : priorityOptions.includes(priorityFromQuery as TicketPriority)
+        ? (priorityFromQuery as TicketPriority)
+        : "All priorities";
 
   const searchValue = searchParams.get("q") ?? "";
   const sortFromQuery = searchParams.get("sort");
@@ -187,7 +192,7 @@ export default function TicketsPage() {
 
     if (next.category !== undefined) {
       if (next.category === "All categories") {
-        params.delete("category");
+        params.set("category", ALL_CATEGORIES);
       } else {
         params.set("category", next.category);
       }
@@ -195,7 +200,7 @@ export default function TicketsPage() {
 
     if (next.priority !== undefined) {
       if (next.priority === "All priorities") {
-        params.delete("priority");
+        params.set("priority", ALL_PRIORITIES);
       } else {
         params.set("priority", next.priority);
       }
@@ -219,7 +224,7 @@ export default function TicketsPage() {
     }
 
     const query = params.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
   const handleFilterChange = (status: StatusFilter) => {
@@ -229,14 +234,20 @@ export default function TicketsPage() {
   const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     updateQuery({
-      category: value ? (value as TicketCategory) : "All categories",
+      category:
+        value === ALL_CATEGORIES
+          ? "All categories"
+          : (value as TicketCategory),
     });
   };
 
   const handlePriorityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     updateQuery({
-      priority: value ? (value as TicketPriority) : "All priorities",
+      priority:
+        value === ALL_PRIORITIES
+          ? "All priorities"
+          : (value as TicketPriority),
     });
   };
 
@@ -321,10 +332,10 @@ export default function TicketsPage() {
             id="ticketCategory"
             name="ticketCategory"
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
-            value={activeCategory === "All categories" ? "" : activeCategory}
+            value={activeCategory === "All categories" ? ALL_CATEGORIES : activeCategory}
             onChange={handleCategoryChange}
           >
-            <option value="">All categories</option>
+            <option value={ALL_CATEGORIES}>All categories</option>
             {categoryOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -340,10 +351,10 @@ export default function TicketsPage() {
             id="ticketPriority"
             name="ticketPriority"
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
-            value={activePriority === "All priorities" ? "" : activePriority}
+            value={activePriority === "All priorities" ? ALL_PRIORITIES : activePriority}
             onChange={handlePriorityChange}
           >
-            <option value="">All priorities</option>
+            <option value={ALL_PRIORITIES}>All priorities</option>
             {priorityOptions.map((option) => (
               <option key={option} value={option}>
                 {option}

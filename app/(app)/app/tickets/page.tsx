@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -81,7 +81,7 @@ export default function TicketsPage() {
       : "All";
 
   const categoryFromQuery = searchParams.get("category");
-  const activeCategory: CategoryFilter =
+  const activeCategoryFromQuery: CategoryFilter =
     !categoryFromQuery || categoryFromQuery === ALL_CATEGORIES
       ? "All categories"
       : categoryOptions.includes(categoryFromQuery as TicketCategory)
@@ -89,7 +89,7 @@ export default function TicketsPage() {
         : "All categories";
 
   const priorityFromQuery = searchParams.get("priority");
-  const activePriority: PriorityFilter =
+  const activePriorityFromQuery: PriorityFilter =
     !priorityFromQuery || priorityFromQuery === ALL_PRIORITIES
       ? "All priorities"
       : priorityOptions.includes(priorityFromQuery as TicketPriority)
@@ -103,9 +103,21 @@ export default function TicketsPage() {
       ? sortFromQuery
       : "newest";
 
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(
+    activeCategoryFromQuery
+  );
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(
+    activePriorityFromQuery
+  );
+
   useEffect(() => {
     hydrateTickets();
   }, [hydrateTickets]);
+
+  useEffect(() => {
+    setCategoryFilter(activeCategoryFromQuery);
+    setPriorityFilter(activePriorityFromQuery);
+  }, [activeCategoryFromQuery, activePriorityFromQuery]);
 
   const counts = useMemo(() => {
     return tickets.reduce(
@@ -128,11 +140,11 @@ export default function TicketsPage() {
     if (activeFilter !== "All") {
       list = list.filter((ticket) => ticket.status === activeFilter);
     }
-    if (activeCategory !== "All categories") {
-      list = list.filter((ticket) => ticket.category === activeCategory);
+    if (categoryFilter !== "All categories") {
+      list = list.filter((ticket) => ticket.category === categoryFilter);
     }
-    if (activePriority !== "All priorities") {
-      list = list.filter((ticket) => ticket.priority === activePriority);
+    if (priorityFilter !== "All priorities") {
+      list = list.filter((ticket) => ticket.priority === priorityFilter);
     }
     const normalizedSearch = searchValue.trim().toLowerCase();
     if (normalizedSearch) {
@@ -142,7 +154,7 @@ export default function TicketsPage() {
       });
     }
     return list;
-  }, [tickets, activeFilter, searchValue]);
+  }, [tickets, activeFilter, categoryFilter, priorityFilter, searchValue]);
 
   const sortedTickets = useMemo(() => {
     const list = [...filteredTickets];
@@ -233,22 +245,22 @@ export default function TicketsPage() {
 
   const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
-    updateQuery({
-      category:
-        value === ALL_CATEGORIES
-          ? "All categories"
-          : (value as TicketCategory),
-    });
+    const nextCategory: CategoryFilter =
+      value === ALL_CATEGORIES
+        ? "All categories"
+        : (value as TicketCategory);
+    setCategoryFilter(nextCategory);
+    updateQuery({ category: nextCategory });
   };
 
   const handlePriorityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
-    updateQuery({
-      priority:
-        value === ALL_PRIORITIES
-          ? "All priorities"
-          : (value as TicketPriority),
-    });
+    const nextPriority: PriorityFilter =
+      value === ALL_PRIORITIES
+        ? "All priorities"
+        : (value as TicketPriority);
+    setPriorityFilter(nextPriority);
+    updateQuery({ priority: nextPriority });
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -332,7 +344,11 @@ export default function TicketsPage() {
             id="ticketCategory"
             name="ticketCategory"
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
-            value={activeCategory === "All categories" ? ALL_CATEGORIES : activeCategory}
+            value={
+              categoryFilter === "All categories"
+                ? ALL_CATEGORIES
+                : categoryFilter
+            }
             onChange={handleCategoryChange}
           >
             <option value={ALL_CATEGORIES}>All categories</option>
@@ -351,7 +367,11 @@ export default function TicketsPage() {
             id="ticketPriority"
             name="ticketPriority"
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
-            value={activePriority === "All priorities" ? ALL_PRIORITIES : activePriority}
+            value={
+              priorityFilter === "All priorities"
+                ? ALL_PRIORITIES
+                : priorityFilter
+            }
             onChange={handlePriorityChange}
           >
             <option value={ALL_PRIORITIES}>All priorities</option>

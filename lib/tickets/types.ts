@@ -43,6 +43,7 @@ export type Ticket = {
   createdAt: string;
   updatedAt: string;
   aiOutput?: TicketAiOutput;
+  aiOutputHistory?: TicketAiOutput[];
 };
 
 export type CreateTicketInput = {

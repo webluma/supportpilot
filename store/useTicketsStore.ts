@@ -23,6 +23,7 @@ type TicketsState = {
   updateTicket: (id: string, patch: Partial<Ticket>) => Ticket | null;
   updateTicketStatus: (id: string, status: TicketStatus) => Ticket | null;
   saveAiOutput: (id: string, output: TicketAiOutput) => Ticket | null;
+  restoreAiOutputVersion: (id: string, historyIndex: number) => Ticket | null;
   deleteTicket: (id: string) => boolean;
   clearAllTickets: () => void;
 };
@@ -66,10 +67,27 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
     return get().updateTicket(id, { status });
   },
   saveAiOutput: (id, output) => {
-    const persistedTicket = updateTicketRecord(id, {
+    const currentTicket = get().tickets.find((ticket) => ticket.id === id);
+    const previousOutput = currentTicket?.aiOutput;
+    const existingHistory = currentTicket?.aiOutputHistory ?? [];
+    let nextHistory: TicketAiOutput[] | undefined;
+
+    if (previousOutput) {
+      const updatedHistory = [...existingHistory, previousOutput];
+      nextHistory = updatedHistory.slice(-5);
+    } else if (existingHistory.length > 0) {
+      nextHistory = existingHistory;
+    }
+
+    const patch: Partial<Ticket> = {
       aiOutput: output,
       status: "Resolved",
-    });
+    };
+    if (nextHistory) {
+      patch.aiOutputHistory = nextHistory;
+    }
+
+    const persistedTicket = updateTicketRecord(id, patch);
     if (!persistedTicket) {
       return null;
     }
@@ -85,7 +103,54 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
         const nextTicket: Ticket = {
           ...ticket,
           aiOutput: output,
+          aiOutputHistory: nextHistory ?? ticket.aiOutputHistory,
           status: "Resolved",
+          updatedAt: now,
+        };
+        updatedTicket = nextTicket;
+        return nextTicket;
+      }),
+    }));
+
+    return updatedTicket ?? persistedTicket;
+  },
+  restoreAiOutputVersion: (id, historyIndex) => {
+    const currentTicket = get().tickets.find((ticket) => ticket.id === id);
+    const history = currentTicket?.aiOutputHistory ?? [];
+    if (!currentTicket || history.length === 0) {
+      return null;
+    }
+    if (historyIndex < 0 || historyIndex >= history.length) {
+      return null;
+    }
+
+    const restoredOutput = history[historyIndex];
+    let nextHistory = history;
+    if (currentTicket.aiOutput) {
+      const updatedHistory = [...history, currentTicket.aiOutput];
+      nextHistory = updatedHistory.slice(-5);
+    }
+
+    const persistedTicket = updateTicketRecord(id, {
+      aiOutput: restoredOutput,
+      aiOutputHistory: nextHistory,
+    });
+    if (!persistedTicket) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    let updatedTicket: Ticket | null = null;
+
+    set((state) => ({
+      tickets: state.tickets.map((ticket) => {
+        if (ticket.id !== id) {
+          return ticket;
+        }
+        const nextTicket: Ticket = {
+          ...ticket,
+          aiOutput: restoredOutput,
+          aiOutputHistory: nextHistory,
           updatedAt: now,
         };
         updatedTicket = nextTicket;

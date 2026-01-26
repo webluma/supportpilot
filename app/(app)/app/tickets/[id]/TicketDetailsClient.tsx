@@ -95,6 +95,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const isHydrated = useTicketsStore((state) => state.isHydrated);
   const hydrateTickets = useTicketsStore((state) => state.hydrateTickets);
   const saveAiOutput = useTicketsStore((state) => state.saveAiOutput);
+  const restoreAiOutputVersion = useTicketsStore(
+    (state) => state.restoreAiOutputVersion,
+  );
   const updateTicketStatus = useTicketsStore(
     (state) => state.updateTicketStatus,
   );
@@ -247,6 +250,13 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     }
 
     await handleGenerateAi();
+  };
+
+  const handleRestoreVersion = (historyIndex: number) => {
+    if (!ticket || aiState === "loading") {
+      return;
+    }
+    restoreAiOutputVersion(ticket.id, historyIndex);
   };
 
   const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -410,6 +420,46 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
               {ticket.aiOutput.generatedAt && ticket.aiOutput.model ? " · " : null}
               {ticket.aiOutput.model ? `Model: ${ticket.aiOutput.model}` : null}
             </div>
+          ) : null}
+          {ticket.aiOutputHistory && ticket.aiOutputHistory.length > 0 ? (
+            <Card className="p-6">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Version history
+                </p>
+                <div className="grid gap-3">
+                  {ticket.aiOutputHistory.map((version, index) => {
+                    const historyKeyBase = version.generatedAt ?? "history";
+                    return (
+                      <div
+                        key={`${historyKeyBase}-${index}`}
+                        className="flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-slate-900">
+                            Version {index + 1}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {version.generatedAt
+                              ? `Generated at: ${version.generatedAt}`
+                              : "Generated at: —"}
+                            {version.model ? ` · Model: ${version.model}` : ""}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => handleRestoreVersion(index)}
+                          disabled={aiState === "loading"}
+                        >
+                          Restore
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Card>
           ) : null}
           <div className="grid gap-4">
             <Card className="p-6">

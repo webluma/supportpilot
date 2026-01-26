@@ -43,9 +43,9 @@ const priorityRank: Record<TicketPriority, number> = {
 
 const ALL_CATEGORIES = "all";
 const ALL_PRIORITIES = "all";
-const ALL_ANSWERED = "all";
-const ANSWERED_YES = "yes";
-const ANSWERED_NO = "no";
+const AI_ALL = "all";
+const AI_ANSWERED = "answered";
+const AI_PENDING = "pending";
 
 const categoryOptions: TicketCategory[] = [
   "Bug",
@@ -67,7 +67,7 @@ type CategoryFilter = "All categories" | TicketCategory;
 
 type PriorityFilter = "All priorities" | TicketPriority;
 
-type AnsweredFilter = "All" | "Answered" | "Pending";
+type AiFilter = "All" | "Answered" | "Pending";
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
   const isHydrated = useTicketsStore((state) => state.isHydrated);
@@ -107,13 +107,13 @@ export default function TicketsPage() {
       ? sortFromQuery
       : "newest";
 
-  const answeredFromQuery = searchParams.get("answered");
-  const activeAnsweredFromQuery: AnsweredFilter =
-    !answeredFromQuery || answeredFromQuery === ALL_ANSWERED
+  const aiFromQuery = searchParams.get("ai") ?? searchParams.get("answered");
+  const activeAiFromQuery: AiFilter =
+    !aiFromQuery || aiFromQuery === AI_ALL
       ? "All"
-      : answeredFromQuery === ANSWERED_YES
+      : aiFromQuery === AI_ANSWERED || aiFromQuery === "yes"
         ? "Answered"
-        : answeredFromQuery === ANSWERED_NO
+        : aiFromQuery === AI_PENDING || aiFromQuery === "no"
           ? "Pending"
           : "All";
 
@@ -123,9 +123,7 @@ export default function TicketsPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(
     activePriorityFromQuery
   );
-  const [answeredFilter, setAnsweredFilter] = useState<AnsweredFilter>(
-    activeAnsweredFromQuery
-  );
+  const [aiFilter, setAiFilter] = useState<AiFilter>(activeAiFromQuery);
 
   useEffect(() => {
     hydrateTickets();
@@ -134,12 +132,8 @@ export default function TicketsPage() {
   useEffect(() => {
     setCategoryFilter(activeCategoryFromQuery);
     setPriorityFilter(activePriorityFromQuery);
-    setAnsweredFilter(activeAnsweredFromQuery);
-  }, [
-    activeCategoryFromQuery,
-    activePriorityFromQuery,
-    activeAnsweredFromQuery,
-  ]);
+    setAiFilter(activeAiFromQuery);
+  }, [activeCategoryFromQuery, activePriorityFromQuery, activeAiFromQuery]);
 
   const counts = useMemo(() => {
     return tickets.reduce(
@@ -157,6 +151,25 @@ export default function TicketsPage() {
     );
   }, [tickets]);
 
+  const aiCounts = useMemo(() => {
+    return tickets.reduce(
+      (acc, ticket) => {
+        acc.All += 1;
+        if (ticket.aiOutput) {
+          acc.Answered += 1;
+        } else {
+          acc.Pending += 1;
+        }
+        return acc;
+      },
+      {
+        All: 0,
+        Answered: 0,
+        Pending: 0,
+      }
+    );
+  }, [tickets]);
+
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (activeFilter !== "All") {
@@ -168,7 +181,7 @@ export default function TicketsPage() {
     if (priorityFilter !== "All priorities") {
       count += 1;
     }
-    if (answeredFilter !== "All") {
+    if (aiFilter !== "All") {
       count += 1;
     }
     if (searchValue.trim().length > 0) {
@@ -182,7 +195,7 @@ export default function TicketsPage() {
     activeFilter,
     categoryFilter,
     priorityFilter,
-    answeredFilter,
+    aiFilter,
     searchValue,
     sortOption,
   ]);
@@ -200,9 +213,9 @@ export default function TicketsPage() {
     if (priorityFilter !== "All priorities") {
       list = list.filter((ticket) => ticket.priority === priorityFilter);
     }
-    if (answeredFilter === "Answered") {
+    if (aiFilter === "Answered") {
       list = list.filter((ticket) => Boolean(ticket.aiOutput));
-    } else if (answeredFilter === "Pending") {
+    } else if (aiFilter === "Pending") {
       list = list.filter((ticket) => !ticket.aiOutput);
     }
     const normalizedSearch = searchValue.trim().toLowerCase();
@@ -218,7 +231,7 @@ export default function TicketsPage() {
     activeFilter,
     categoryFilter,
     priorityFilter,
-    answeredFilter,
+    aiFilter,
     searchValue,
   ]);
 
@@ -255,7 +268,7 @@ export default function TicketsPage() {
     status?: StatusFilter;
     category?: CategoryFilter;
     priority?: PriorityFilter;
-    answered?: AnsweredFilter;
+    ai?: AiFilter;
     q?: string;
     sort?: SortOption;
   }) => {
@@ -285,14 +298,15 @@ export default function TicketsPage() {
       }
     }
 
-    if (next.answered !== undefined) {
-      if (next.answered === "All") {
-        params.set("answered", ALL_ANSWERED);
-      } else if (next.answered === "Answered") {
-        params.set("answered", ANSWERED_YES);
+    if (next.ai !== undefined) {
+      if (next.ai === "All") {
+        params.delete("ai");
+      } else if (next.ai === "Answered") {
+        params.set("ai", AI_ANSWERED);
       } else {
-        params.set("answered", ANSWERED_NO);
+        params.set("ai", AI_PENDING);
       }
+      params.delete("answered");
     }
 
     if (next.q !== undefined) {
@@ -320,20 +334,20 @@ export default function TicketsPage() {
     updateQuery({ status });
   };
 
-  const handleAnsweredChange = (next: AnsweredFilter) => {
-    setAnsweredFilter(next);
-    updateQuery({ answered: next });
+  const handleAiChange = (next: AiFilter) => {
+    setAiFilter(next);
+    updateQuery({ ai: next });
   };
 
   const handleClearFilters = () => {
     setCategoryFilter("All categories");
     setPriorityFilter("All priorities");
-    setAnsweredFilter("All");
+    setAiFilter("All");
     updateQuery({
       status: "All",
       category: "All categories",
       priority: "All priorities",
-      answered: "All",
+      ai: "All",
       q: "",
       sort: "newest",
     });
@@ -400,14 +414,14 @@ export default function TicketsPage() {
         )}
       </div>
       <div className="flex min-w-0 flex-wrap gap-2">
-        {(["All", "Answered", "Pending"] as AnsweredFilter[]).map((option) => (
+        {(["All", "Answered", "Pending"] as AiFilter[]).map((option) => (
           <Button
             key={option}
             type="button"
-            variant={answeredFilter === option ? "primary" : "secondary"}
-            onClick={() => handleAnsweredChange(option)}
+            variant={aiFilter === option ? "primary" : "secondary"}
+            onClick={() => handleAiChange(option)}
           >
-            {option}
+            {option} ({aiCounts[option]})
           </Button>
         ))}
       </div>

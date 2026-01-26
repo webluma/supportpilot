@@ -61,13 +61,13 @@ const priorityOptions: TicketPriority[] = ["Low", "Medium", "High", "Urgent"];
 
 type StatusFilter = "All" | TicketStatus;
 
-type SortOption = "newest" | "oldest" | "priority";
+type SortOption = "newest" | "oldest" | "priority" | "updated";
 
 type CategoryFilter = "All categories" | TicketCategory;
 
 type PriorityFilter = "All priorities" | TicketPriority;
 
-type AiFilter = "All" | "Answered" | "Pending";
+type AiFilter = "all" | "pending" | "answered";
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
   const isHydrated = useTicketsStore((state) => state.isHydrated);
@@ -103,19 +103,20 @@ export default function TicketsPage() {
   const searchValue = searchParams.get("q") ?? "";
   const sortFromQuery = searchParams.get("sort");
   const sortOption: SortOption =
-    sortFromQuery === "oldest" || sortFromQuery === "priority"
+    sortFromQuery === "oldest" ||
+    sortFromQuery === "priority" ||
+    sortFromQuery === "updated"
       ? sortFromQuery
       : "newest";
 
-  const aiFromQuery = searchParams.get("ai") ?? searchParams.get("answered");
-  const activeAiFromQuery: AiFilter =
-    !aiFromQuery || aiFromQuery === AI_ALL
-      ? "All"
-      : aiFromQuery === AI_ANSWERED || aiFromQuery === "yes"
-        ? "Answered"
-        : aiFromQuery === AI_PENDING || aiFromQuery === "no"
-          ? "Pending"
-          : "All";
+  const aiFromQuery = searchParams.get("ai");
+  const isValidAiParam =
+    aiFromQuery === AI_ALL ||
+    aiFromQuery === AI_ANSWERED ||
+    aiFromQuery === AI_PENDING;
+  const activeAiFromQuery: AiFilter = isValidAiParam
+    ? (aiFromQuery as AiFilter)
+    : AI_ALL;
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(
     activeCategoryFromQuery
@@ -154,18 +155,18 @@ export default function TicketsPage() {
   const aiCounts = useMemo(() => {
     return tickets.reduce(
       (acc, ticket) => {
-        acc.All += 1;
+        acc.all += 1;
         if (ticket.aiOutput) {
-          acc.Answered += 1;
+          acc.answered += 1;
         } else {
-          acc.Pending += 1;
+          acc.pending += 1;
         }
         return acc;
       },
       {
-        All: 0,
-        Answered: 0,
-        Pending: 0,
+        all: 0,
+        answered: 0,
+        pending: 0,
       }
     );
   }, [tickets]);
@@ -181,7 +182,7 @@ export default function TicketsPage() {
     if (priorityFilter !== "All priorities") {
       count += 1;
     }
-    if (aiFilter !== "All") {
+    if (aiFilter !== "all") {
       count += 1;
     }
     if (searchValue.trim().length > 0) {
@@ -213,9 +214,9 @@ export default function TicketsPage() {
     if (priorityFilter !== "All priorities") {
       list = list.filter((ticket) => ticket.priority === priorityFilter);
     }
-    if (aiFilter === "Answered") {
+    if (aiFilter === "answered") {
       list = list.filter((ticket) => Boolean(ticket.aiOutput));
-    } else if (aiFilter === "Pending") {
+    } else if (aiFilter === "pending") {
       list = list.filter((ticket) => !ticket.aiOutput);
     }
     const normalizedSearch = searchValue.trim().toLowerCase();
@@ -253,6 +254,16 @@ export default function TicketsPage() {
         return (
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
+      });
+      return list;
+    }
+    if (sortOption === "updated") {
+      list.sort((a, b) => {
+        const aTime = new Date(a.updatedAt ?? a.createdAt).getTime();
+        const bTime = new Date(b.updatedAt ?? b.createdAt).getTime();
+        const safeATime = Number.isNaN(aTime) ? 0 : aTime;
+        const safeBTime = Number.isNaN(bTime) ? 0 : bTime;
+        return safeBTime - safeATime;
       });
       return list;
     }
@@ -299,14 +310,7 @@ export default function TicketsPage() {
     }
 
     if (next.ai !== undefined) {
-      if (next.ai === "All") {
-        params.delete("ai");
-      } else if (next.ai === "Answered") {
-        params.set("ai", AI_ANSWERED);
-      } else {
-        params.set("ai", AI_PENDING);
-      }
-      params.delete("answered");
+      params.set("ai", next.ai);
     }
 
     if (next.q !== undefined) {
@@ -330,6 +334,12 @@ export default function TicketsPage() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
+  useEffect(() => {
+    if (!isValidAiParam) {
+      updateQuery({ ai: AI_ALL });
+    }
+  }, [isValidAiParam]);
+
   const handleFilterChange = (status: StatusFilter) => {
     updateQuery({ status });
   };
@@ -342,12 +352,12 @@ export default function TicketsPage() {
   const handleClearFilters = () => {
     setCategoryFilter("All categories");
     setPriorityFilter("All priorities");
-    setAiFilter("All");
+    setAiFilter(AI_ALL);
     updateQuery({
       status: "All",
       category: "All categories",
       priority: "All priorities",
-      ai: "All",
+      ai: AI_ALL,
       q: "",
       sort: "newest",
     });
@@ -414,14 +424,20 @@ export default function TicketsPage() {
         )}
       </div>
       <div className="flex min-w-0 flex-wrap gap-2">
-        {(["All", "Answered", "Pending"] as AiFilter[]).map((option) => (
+        {(
+          [
+            { label: "All AI", value: AI_ALL },
+            { label: "Pending", value: AI_PENDING },
+            { label: "Answered", value: AI_ANSWERED },
+          ] as Array<{ label: string; value: AiFilter }>
+        ).map((option) => (
           <Button
-            key={option}
+            key={option.value}
             type="button"
-            variant={aiFilter === option ? "primary" : "secondary"}
-            onClick={() => handleAiChange(option)}
+            variant={aiFilter === option.value ? "primary" : "secondary"}
+            onClick={() => handleAiChange(option.value)}
           >
-            {option} ({aiCounts[option]})
+            {option.label} ({aiCounts[option.value]})
           </Button>
         ))}
       </div>
@@ -462,6 +478,7 @@ export default function TicketsPage() {
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="priority">Priority</option>
+            <option value="updated">Recently updated</option>
           </select>
         </div>
       </div>

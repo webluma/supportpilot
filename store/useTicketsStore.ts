@@ -66,20 +66,7 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
     return get().updateTicket(id, { status });
   },
   saveAiOutput: (id, output) => {
-    const updatedTicket = updateTicketRecord(id, {
-      aiOutput: output,
-      status: "Resolved",
-    });
-    if (!updatedTicket) {
-      return null;
-    }
-
-    set((state) => ({
-      tickets: state.tickets.map((ticket) =>
-        ticket.id === id ? updatedTicket : ticket,
-      ),
-    }));
-    return updatedTicket;
+    return get().updateTicket(id, { aiOutput: output, status: "Resolved" });
   },
   deleteTicket: (id) => {
     const didDelete = deleteTicketRecord(id);

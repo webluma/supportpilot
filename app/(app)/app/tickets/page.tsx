@@ -157,6 +157,38 @@ export default function TicketsPage() {
     );
   }, [tickets]);
 
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (activeFilter !== "All") {
+      count += 1;
+    }
+    if (categoryFilter !== "All categories") {
+      count += 1;
+    }
+    if (priorityFilter !== "All priorities") {
+      count += 1;
+    }
+    if (answeredFilter !== "All") {
+      count += 1;
+    }
+    if (searchValue.trim().length > 0) {
+      count += 1;
+    }
+    if (sortOption !== "newest") {
+      count += 1;
+    }
+    return count;
+  }, [
+    activeFilter,
+    categoryFilter,
+    priorityFilter,
+    answeredFilter,
+    searchValue,
+    sortOption,
+  ]);
+
+  const hasActiveFilters = activeFiltersCount > 0;
+
   const filteredTickets = useMemo(() => {
     let list = tickets;
     if (activeFilter !== "All") {
@@ -293,6 +325,20 @@ export default function TicketsPage() {
     updateQuery({ answered: next });
   };
 
+  const handleClearFilters = () => {
+    setCategoryFilter("All categories");
+    setPriorityFilter("All priorities");
+    setAnsweredFilter("All");
+    updateQuery({
+      status: "All",
+      category: "All categories",
+      priority: "All priorities",
+      answered: "All",
+      q: "",
+      sort: "newest",
+    });
+  };
+
   const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     const nextCategory: CategoryFilter =
@@ -365,6 +411,14 @@ export default function TicketsPage() {
           </Button>
         ))}
       </div>
+      {hasActiveFilters ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-600">
+          <span>Active filters: {activeFiltersCount}</span>
+          <Button type="button" variant="secondary" onClick={handleClearFilters}>
+            Clear filters
+          </Button>
+        </div>
+      ) : null}
       <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="w-full min-w-0 sm:max-w-sm">
           <label className="sr-only" htmlFor="ticketSearch">

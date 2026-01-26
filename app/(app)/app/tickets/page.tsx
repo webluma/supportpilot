@@ -43,6 +43,9 @@ const priorityRank: Record<TicketPriority, number> = {
 
 const ALL_CATEGORIES = "all";
 const ALL_PRIORITIES = "all";
+const ALL_ANSWERED = "all";
+const ANSWERED_YES = "yes";
+const ANSWERED_NO = "no";
 
 const categoryOptions: TicketCategory[] = [
   "Bug",
@@ -64,6 +67,7 @@ type CategoryFilter = "All categories" | TicketCategory;
 
 type PriorityFilter = "All priorities" | TicketPriority;
 
+type AnsweredFilter = "All" | "Answered" | "Pending";
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
   const isHydrated = useTicketsStore((state) => state.isHydrated);
@@ -103,11 +107,24 @@ export default function TicketsPage() {
       ? sortFromQuery
       : "newest";
 
+  const answeredFromQuery = searchParams.get("answered");
+  const activeAnsweredFromQuery: AnsweredFilter =
+    !answeredFromQuery || answeredFromQuery === ALL_ANSWERED
+      ? "All"
+      : answeredFromQuery === ANSWERED_YES
+        ? "Answered"
+        : answeredFromQuery === ANSWERED_NO
+          ? "Pending"
+          : "All";
+
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(
     activeCategoryFromQuery
   );
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(
     activePriorityFromQuery
+  );
+  const [answeredFilter, setAnsweredFilter] = useState<AnsweredFilter>(
+    activeAnsweredFromQuery
   );
 
   useEffect(() => {
@@ -117,7 +134,12 @@ export default function TicketsPage() {
   useEffect(() => {
     setCategoryFilter(activeCategoryFromQuery);
     setPriorityFilter(activePriorityFromQuery);
-  }, [activeCategoryFromQuery, activePriorityFromQuery]);
+    setAnsweredFilter(activeAnsweredFromQuery);
+  }, [
+    activeCategoryFromQuery,
+    activePriorityFromQuery,
+    activeAnsweredFromQuery,
+  ]);
 
   const counts = useMemo(() => {
     return tickets.reduce(
@@ -146,6 +168,11 @@ export default function TicketsPage() {
     if (priorityFilter !== "All priorities") {
       list = list.filter((ticket) => ticket.priority === priorityFilter);
     }
+    if (answeredFilter === "Answered") {
+      list = list.filter((ticket) => Boolean(ticket.aiOutput));
+    } else if (answeredFilter === "Pending") {
+      list = list.filter((ticket) => !ticket.aiOutput);
+    }
     const normalizedSearch = searchValue.trim().toLowerCase();
     if (normalizedSearch) {
       list = list.filter((ticket) => {
@@ -154,7 +181,14 @@ export default function TicketsPage() {
       });
     }
     return list;
-  }, [tickets, activeFilter, categoryFilter, priorityFilter, searchValue]);
+  }, [
+    tickets,
+    activeFilter,
+    categoryFilter,
+    priorityFilter,
+    answeredFilter,
+    searchValue,
+  ]);
 
   const sortedTickets = useMemo(() => {
     const list = [...filteredTickets];
@@ -189,6 +223,7 @@ export default function TicketsPage() {
     status?: StatusFilter;
     category?: CategoryFilter;
     priority?: PriorityFilter;
+    answered?: AnsweredFilter;
     q?: string;
     sort?: SortOption;
   }) => {
@@ -218,6 +253,16 @@ export default function TicketsPage() {
       }
     }
 
+    if (next.answered !== undefined) {
+      if (next.answered === "All") {
+        params.set("answered", ALL_ANSWERED);
+      } else if (next.answered === "Answered") {
+        params.set("answered", ANSWERED_YES);
+      } else {
+        params.set("answered", ANSWERED_NO);
+      }
+    }
+
     if (next.q !== undefined) {
       const trimmed = next.q.trim();
       if (!trimmed) {
@@ -241,6 +286,11 @@ export default function TicketsPage() {
 
   const handleFilterChange = (status: StatusFilter) => {
     updateQuery({ status });
+  };
+
+  const handleAnsweredChange = (next: AnsweredFilter) => {
+    setAnsweredFilter(next);
+    updateQuery({ answered: next });
   };
 
   const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -302,6 +352,18 @@ export default function TicketsPage() {
             </Button>
           )
         )}
+      </div>
+      <div className="flex min-w-0 flex-wrap gap-2">
+        {(["All", "Answered", "Pending"] as AnsweredFilter[]).map((option) => (
+          <Button
+            key={option}
+            type="button"
+            variant={answeredFilter === option ? "primary" : "secondary"}
+            onClick={() => handleAnsweredChange(option)}
+          >
+            {option}
+          </Button>
+        ))}
       </div>
       <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="w-full min-w-0 sm:max-w-sm">

@@ -102,7 +102,10 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const [aiError, setAiError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<CopyKey | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [replyCopied, setReplyCopied] = useState(false);
+  const [replyCopyError, setReplyCopyError] = useState<string | null>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCopyKeyRef = useRef<CopyKey | null>(null);
 
   useEffect(() => {
@@ -112,12 +115,17 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   useEffect(() => {
     setAiState("idle");
     setAiError(null);
+    setReplyCopied(false);
+    setReplyCopyError(null);
   }, [id]);
 
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
+      }
+      if (replyCopyTimeoutRef.current) {
+        clearTimeout(replyCopyTimeoutRef.current);
       }
     };
   }, []);
@@ -131,10 +139,14 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     setAiError(null);
 
     try {
+      const ticketForAi = {
+        ...ticket,
+        aiOutput: undefined,
+      };
       const response = await fetch("/api/ai/ticket-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticket }),
+        body: JSON.stringify({ ticket: ticketForAi }),
       });
 
       if (!response.ok) {
@@ -203,6 +215,38 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
 
     setCopiedKey(null);
     setCopyError("Copy failed. Please try again.");
+  };
+
+  const handleCopyCustomerReply = async () => {
+    if (!ticket?.aiOutput || aiState === "loading") {
+      return;
+    }
+
+    setReplyCopyError(null);
+    if (replyCopyTimeoutRef.current) {
+      clearTimeout(replyCopyTimeoutRef.current);
+      replyCopyTimeoutRef.current = null;
+    }
+
+    const success = await copyToClipboard(ticket.aiOutput.customerReply);
+    if (success) {
+      setReplyCopied(true);
+      replyCopyTimeoutRef.current = setTimeout(() => {
+        setReplyCopied(false);
+      }, 1000);
+      return;
+    }
+
+    setReplyCopied(false);
+    setReplyCopyError("Copy failed. Please try again.");
+  };
+
+  const handleRegenerateAi = async () => {
+    if (!ticket || aiState === "loading") {
+      return;
+    }
+
+    await handleGenerateAi();
   };
 
   const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -336,102 +380,137 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
         </div>
       </Card>
       {ticket.aiOutput ? (
-        <div className="grid gap-4">
-          <Card className="p-6">
-            <div className="space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  Customer Reply
-                </p>
-                <div className="flex flex-col items-end gap-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-3"
-                    onClick={() =>
-                      handleCopy("customer", ticket.aiOutput.customerReply)
-                    }
-                  >
-                    {copiedKey === "customer" ? "Copied!" : "Copy"}
-                  </Button>
-                  {copyError &&
-                  lastCopyKeyRef.current === "customer" ? (
-                    <span className="text-xs text-rose-600">
-                      Copy failed. Please try again.
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <p className="whitespace-pre-line text-sm text-slate-600">
-                {ticket.aiOutput.customerReply}
-              </p>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleCopyCustomerReply}
+              disabled={aiState === "loading"}
+            >
+              {replyCopied ? "Copied" : "Copy customer reply"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleRegenerateAi}
+              disabled={aiState === "loading"}
+            >
+              Regenerate AI output
+            </Button>
+            {replyCopyError ? (
+              <span className="text-xs text-rose-600">{replyCopyError}</span>
+            ) : null}
+          </div>
+          {ticket.aiOutput.generatedAt || ticket.aiOutput.model ? (
+            <div className="text-xs text-slate-500">
+              {ticket.aiOutput.generatedAt
+                ? `Generated at: ${ticket.aiOutput.generatedAt}`
+                : null}
+              {ticket.aiOutput.generatedAt && ticket.aiOutput.model ? " · " : null}
+              {ticket.aiOutput.model ? `Model: ${ticket.aiOutput.model}` : null}
             </div>
-          </Card>
-          <Card className="p-6">
-            <div className="space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  QA Summary
-                </p>
-                <div className="flex flex-col items-end gap-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-3"
-                    onClick={() =>
-                      handleCopy("qa", ticket.aiOutput.qaSummary)
-                    }
-                  >
-                    {copiedKey === "qa" ? "Copied!" : "Copy"}
-                  </Button>
-                  {copyError && lastCopyKeyRef.current === "qa" ? (
-                    <span className="text-xs text-rose-600">
-                      Copy failed. Please try again.
-                    </span>
-                  ) : null}
+          ) : null}
+          <div className="grid gap-4">
+            <Card className="p-6">
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Customer Reply
+                  </p>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      onClick={() =>
+                        handleCopy("customer", ticket.aiOutput.customerReply)
+                      }
+                    >
+                      {copiedKey === "customer" ? "Copied!" : "Copy"}
+                    </Button>
+                    {copyError &&
+                    lastCopyKeyRef.current === "customer" ? (
+                      <span className="text-xs text-rose-600">
+                        Copy failed. Please try again.
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
+                <p className="whitespace-pre-line text-sm text-slate-600">
+                  {ticket.aiOutput.customerReply}
+                </p>
               </div>
-              <p className="whitespace-pre-line text-sm text-slate-600">
-                {ticket.aiOutput.qaSummary}
-              </p>
-            </div>
-          </Card>
-          <Card className="p-6">
-            <div className="space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  Follow-up Questions
-                </p>
-                <div className="flex flex-col items-end gap-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 px-3"
-                    onClick={() =>
-                      handleCopy(
-                        "followups",
-                        ticket.aiOutput.followUpQuestions
-                          .map((question) => `- ${question}`)
-                          .join("\n"),
-                      )
-                    }
-                  >
-                    {copiedKey === "followups" ? "Copied!" : "Copy"}
-                  </Button>
-                  {copyError && lastCopyKeyRef.current === "followups" ? (
-                    <span className="text-xs text-rose-600">
-                      Copy failed. Please try again.
-                    </span>
-                  ) : null}
+            </Card>
+            <Card className="p-6">
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    QA Summary
+                  </p>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      onClick={() =>
+                        handleCopy("qa", ticket.aiOutput.qaSummary)
+                      }
+                    >
+                      {copiedKey === "qa" ? "Copied!" : "Copy"}
+                    </Button>
+                    {copyError && lastCopyKeyRef.current === "qa" ? (
+                      <span className="text-xs text-rose-600">
+                        Copy failed. Please try again.
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
+                <p className="whitespace-pre-line text-sm text-slate-600">
+                  {ticket.aiOutput.qaSummary}
+                </p>
+              </div>
+            </Card>
+            <Card className="p-6">
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Follow-up Questions
+                  </p>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      onClick={() =>
+                        handleCopy(
+                          "followups",
+                          ticket.aiOutput.followUpQuestions
+                            .map((question) => `- ${question}`)
+                            .join("\n"),
+                        )
+                      }
+                    >
+                      {copiedKey === "followups" ? "Copied!" : "Copy"}
+                    </Button>
+                    {copyError && lastCopyKeyRef.current === "followups" ? (
+                      <span className="text-xs text-rose-600">
+                        Copy failed. Please try again.
+                      </span>
+                    ) : null}
+                  </div>
               </div>
               <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
-                {ticket.aiOutput.followUpQuestions.map((question) => (
-                  <li key={question}>{question}</li>
-                ))}
+                {ticket.aiOutput.followUpQuestions.map((question, index) => {
+                  const followUpKeyBase = ticket.aiOutput.generatedAt ?? "ai";
+                  return (
+                    <li key={`${followUpKeyBase}-${index}`}>{question}</li>
+                  );
+                })}
               </ul>
             </div>
           </Card>
+        </div>
         </div>
       ) : aiState === "idle" ? (
         <Card className="p-6">

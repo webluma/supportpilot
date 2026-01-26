@@ -66,7 +66,34 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
     return get().updateTicket(id, { status });
   },
   saveAiOutput: (id, output) => {
-    return get().updateTicket(id, { aiOutput: output, status: "Resolved" });
+    const persistedTicket = updateTicketRecord(id, {
+      aiOutput: output,
+      status: "Resolved",
+    });
+    if (!persistedTicket) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    let updatedTicket: Ticket | null = null;
+
+    set((state) => ({
+      tickets: state.tickets.map((ticket) => {
+        if (ticket.id !== id) {
+          return ticket;
+        }
+        const nextTicket: Ticket = {
+          ...ticket,
+          aiOutput: output,
+          status: "Resolved",
+          updatedAt: now,
+        };
+        updatedTicket = nextTicket;
+        return nextTicket;
+      }),
+    }));
+
+    return updatedTicket ?? persistedTicket;
   },
   deleteTicket: (id) => {
     const didDelete = deleteTicketRecord(id);

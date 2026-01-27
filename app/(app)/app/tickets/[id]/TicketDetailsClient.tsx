@@ -95,9 +95,6 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const isHydrated = useTicketsStore((state) => state.isHydrated);
   const hydrateTickets = useTicketsStore((state) => state.hydrateTickets);
   const saveAiOutput = useTicketsStore((state) => state.saveAiOutput);
-  const restoreAiOutputVersion = useTicketsStore(
-    (state) => state.restoreAiOutputVersion,
-  );
   const updateTicketStatus = useTicketsStore(
     (state) => state.updateTicketStatus,
   );
@@ -107,6 +104,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [replyCopied, setReplyCopied] = useState(false);
   const [replyCopyError, setReplyCopyError] = useState<string | null>(null);
+  const [selectedAi, setSelectedAi] = useState<
+    { kind: "latest" } | { kind: "history"; version: number }
+  >({ kind: "latest" });
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCopyKeyRef = useRef<CopyKey | null>(null);
@@ -120,7 +120,33 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     setAiError(null);
     setReplyCopied(false);
     setReplyCopyError(null);
+    setSelectedAi({ kind: "latest" });
   }, [id]);
+
+  const historyOutputs = ticket?.aiOutputHistory ?? [];
+  const latestOutput = ticket?.aiOutput ?? null;
+  const displayedOutput =
+    selectedAi.kind === "latest"
+      ? latestOutput
+      : historyOutputs.find((item) => item.version === selectedAi.version) ??
+        latestOutput;
+  const totalVersions = latestOutput ? historyOutputs.length + 1 : 0;
+  const shouldShowVersionSelector = totalVersions >= 2;
+
+  useEffect(() => {
+    if (
+      selectedAi.kind === "history" &&
+      !historyOutputs.find((item) => item.version === selectedAi.version)
+    ) {
+      setSelectedAi({ kind: "latest" });
+    }
+  }, [historyOutputs, selectedAi]);
+
+  useEffect(() => {
+    if (ticket?.aiOutput?.generatedAt) {
+      setSelectedAi({ kind: "latest" });
+    }
+  }, [ticket?.aiOutput?.generatedAt]);
 
   useEffect(() => {
     return () => {
@@ -183,6 +209,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
         followUpQuestions: data.followUpQuestions,
         generatedAt: new Date().toISOString(),
         model: "gpt-5-nano",
+        version: 0,
       };
       const updatedTicket = saveAiOutput(ticket.id, persistedOutput);
       if (!updatedTicket) {
@@ -191,6 +218,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
         return;
       }
 
+      setSelectedAi({ kind: "latest" });
       setAiState("success");
     } catch {
       setAiError("Failed to generate AI output.");
@@ -220,8 +248,8 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     setCopyError("Copy failed. Please try again.");
   };
 
-  const handleCopyCustomerReply = async () => {
-    if (!ticket?.aiOutput || aiState === "loading") {
+  const handleCopyCustomerReply = async (output?: TicketAiOutput) => {
+    if (!output || aiState === "loading") {
       return;
     }
 
@@ -231,7 +259,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
       replyCopyTimeoutRef.current = null;
     }
 
-    const success = await copyToClipboard(ticket.aiOutput.customerReply);
+    const success = await copyToClipboard(output.customerReply);
     if (success) {
       setReplyCopied(true);
       replyCopyTimeoutRef.current = setTimeout(() => {
@@ -250,13 +278,6 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     }
 
     await handleGenerateAi();
-  };
-
-  const handleRestoreVersion = (historyIndex: number) => {
-    if (!ticket || aiState === "loading") {
-      return;
-    }
-    restoreAiOutputVersion(ticket.id, historyIndex);
   };
 
   const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -395,8 +416,8 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
             <Button
               type="button"
               variant="secondary"
-              onClick={handleCopyCustomerReply}
-              disabled={aiState === "loading"}
+              onClick={() => handleCopyCustomerReply(displayedOutput)}
+              disabled={aiState === "loading" || !displayedOutput}
             >
               {replyCopied ? "Copied" : "Copy customer reply"}
             </Button>
@@ -412,51 +433,90 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
               <span className="text-xs text-rose-600">{replyCopyError}</span>
             ) : null}
           </div>
-          {ticket.aiOutput.generatedAt || ticket.aiOutput.model ? (
+          {displayedOutput?.generatedAt || displayedOutput?.model ? (
             <div className="text-xs text-slate-500">
-              {ticket.aiOutput.generatedAt
-                ? `Generated at: ${ticket.aiOutput.generatedAt}`
+              {displayedOutput?.generatedAt
+                ? `Generated at: ${displayedOutput.generatedAt}`
                 : null}
-              {ticket.aiOutput.generatedAt && ticket.aiOutput.model ? " · " : null}
-              {ticket.aiOutput.model ? `Model: ${ticket.aiOutput.model}` : null}
+              {displayedOutput?.generatedAt && displayedOutput?.model
+                ? " · "
+                : null}
+              {displayedOutput?.model
+                ? `Model: ${displayedOutput.model}`
+                : null}
             </div>
           ) : null}
-          {ticket.aiOutputHistory && ticket.aiOutputHistory.length > 0 ? (
+          {shouldShowVersionSelector ? (
             <Card className="p-6">
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-slate-900">
-                  Version history
+                  AI Output History
+                </p>
+                <p className="text-xs text-slate-500">
+                  Selected:{" "}
+                  {selectedAi.kind === "latest"
+                    ? `Latest (Version ${latestOutput?.version ?? "—"})`
+                    : `Version ${selectedAi.version}`}
                 </p>
                 <div className="grid gap-3">
-                  {ticket.aiOutputHistory.map((version, index) => {
-                    const historyKeyBase = version.generatedAt ?? "history";
-                    return (
-                      <div
-                        key={`${historyKeyBase}-${index}`}
-                        className="flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-slate-900">
-                            Version {index + 1}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {version.generatedAt
-                              ? `Generated at: ${version.generatedAt}`
-                              : "Generated at: —"}
-                            {version.model ? ` · Model: ${version.model}` : ""}
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => handleRestoreVersion(index)}
-                          disabled={aiState === "loading"}
-                        >
-                          Restore
-                        </Button>
-                      </div>
-                    );
-                  })}
+                  <div className="flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                    <Button
+                      type="button"
+                      variant={
+                        selectedAi.kind === "latest" ? "primary" : "secondary"
+                      }
+                      onClick={() => setSelectedAi({ kind: "latest" })}
+                      disabled={aiState === "loading"}
+                    >
+                      Latest (Version {latestOutput?.version ?? "—"})
+                    </Button>
+                    <span className="text-xs text-slate-500">
+                      {latestOutput?.generatedAt
+                        ? `Generated at: ${latestOutput.generatedAt}`
+                        : "Generated at: —"}
+                      {latestOutput?.model
+                        ? ` · Model: ${latestOutput.model}`
+                        : ""}
+                    </span>
+                  </div>
+                  {historyOutputs.length > 0
+                    ? historyOutputs.map((version) => {
+                        const historyKeyBase = version.generatedAt ?? "history";
+                        const isSelected =
+                          selectedAi.kind === "history" &&
+                          selectedAi.version === version.version;
+                        return (
+                          <div
+                            key={`${historyKeyBase}-${version.version}`}
+                            className="flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                              <Button
+                                type="button"
+                                variant={isSelected ? "primary" : "secondary"}
+                                onClick={() =>
+                                  setSelectedAi({
+                                    kind: "history",
+                                    version: version.version,
+                                  })
+                                }
+                                disabled={aiState === "loading"}
+                              >
+                                Version {version.version}
+                              </Button>
+                              <span className="text-xs text-slate-500">
+                                {version.generatedAt
+                                  ? `Generated at: ${version.generatedAt}`
+                                  : "Generated at: —"}
+                                {version.model
+                                  ? ` · Model: ${version.model}`
+                                  : ""}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    : null}
                 </div>
               </div>
             </Card>
@@ -474,8 +534,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                       variant="secondary"
                       className="h-8 px-3"
                       onClick={() =>
-                        handleCopy("customer", ticket.aiOutput.customerReply)
+                        handleCopy("customer", displayedOutput?.customerReply ?? "")
                       }
+                      disabled={!displayedOutput}
                     >
                       {copiedKey === "customer" ? "Copied!" : "Copy"}
                     </Button>
@@ -488,7 +549,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                   </div>
                 </div>
                 <p className="whitespace-pre-line text-sm text-slate-600">
-                  {ticket.aiOutput.customerReply}
+                  {displayedOutput?.customerReply}
                 </p>
               </div>
             </Card>
@@ -504,8 +565,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                       variant="secondary"
                       className="h-8 px-3"
                       onClick={() =>
-                        handleCopy("qa", ticket.aiOutput.qaSummary)
+                        handleCopy("qa", displayedOutput?.qaSummary ?? "")
                       }
+                      disabled={!displayedOutput}
                     >
                       {copiedKey === "qa" ? "Copied!" : "Copy"}
                     </Button>
@@ -517,7 +579,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                   </div>
                 </div>
                 <p className="whitespace-pre-line text-sm text-slate-600">
-                  {ticket.aiOutput.qaSummary}
+                  {displayedOutput?.qaSummary}
                 </p>
               </div>
             </Card>
@@ -535,11 +597,12 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                       onClick={() =>
                         handleCopy(
                           "followups",
-                          ticket.aiOutput.followUpQuestions
+                          (displayedOutput?.followUpQuestions ?? [])
                             .map((question) => `- ${question}`)
                             .join("\n"),
                         )
                       }
+                      disabled={!displayedOutput}
                     >
                       {copiedKey === "followups" ? "Copied!" : "Copy"}
                     </Button>
@@ -549,17 +612,20 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                       </span>
                     ) : null}
                   </div>
+                </div>
+                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
+                  {(displayedOutput?.followUpQuestions ?? []).map(
+                    (question, index) => {
+                      const followUpKeyBase =
+                        displayedOutput?.generatedAt ?? "ai";
+                      return (
+                        <li key={`${followUpKeyBase}-${index}`}>{question}</li>
+                      );
+                    },
+                  )}
+                </ul>
               </div>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
-                {ticket.aiOutput.followUpQuestions.map((question, index) => {
-                  const followUpKeyBase = ticket.aiOutput.generatedAt ?? "ai";
-                  return (
-                    <li key={`${followUpKeyBase}-${index}`}>{question}</li>
-                  );
-                })}
-              </ul>
-            </div>
-          </Card>
+            </Card>
         </div>
         </div>
       ) : aiState === "idle" ? (

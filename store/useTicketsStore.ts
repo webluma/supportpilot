@@ -28,6 +28,8 @@ type TicketsState = {
   clearAllTickets: () => void;
 };
 
+const MAX_AI_HISTORY = 5;
+
 export const useTicketsStore = create<TicketsState>()((set, get) => ({
   tickets: [],
   isHydrated: false,
@@ -43,7 +45,63 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
       return;
     }
 
-    set({ tickets: storedTickets, isHydrated: true });
+    const normalizedTickets = storedTickets.map((ticket) => {
+      const existingHistory = ticket.aiOutputHistory ?? [];
+      let normalizedHistory = existingHistory;
+
+      const historyMissingVersion = normalizedHistory.some(
+        (item) => typeof item.version !== "number",
+      );
+      if (historyMissingVersion && normalizedHistory.length > 0) {
+        const sortedByDate = [...normalizedHistory].sort((a, b) => {
+          const aTime = new Date(a.generatedAt).getTime();
+          const bTime = new Date(b.generatedAt).getTime();
+          const safeATime = Number.isNaN(aTime) ? 0 : aTime;
+          const safeBTime = Number.isNaN(bTime) ? 0 : bTime;
+          return safeATime - safeBTime;
+        });
+        normalizedHistory = sortedByDate.map((item, index) => ({
+          ...item,
+          version: index + 1,
+        }));
+      }
+
+      const normalizedLatest = ticket.aiOutput
+        ? {
+            ...ticket.aiOutput,
+            version:
+              ticket.aiOutput.version ??
+              ticket.aiOutputVersionCounter ??
+              1,
+          }
+        : undefined;
+
+      const versionCounterCandidates = [
+        normalizedLatest?.version ?? 0,
+        ...normalizedHistory.map((item) => item.version),
+        ticket.aiOutputVersionCounter ?? 0,
+      ];
+      const maxVersion = versionCounterCandidates.length
+        ? Math.max(...versionCounterCandidates)
+        : 0;
+
+      const original = normalizedHistory.find((item) => item.version === 1);
+      const rest = normalizedHistory
+        .filter((item) => item.version !== 1)
+        .sort((a, b) => a.version - b.version);
+      const keepTail = rest.slice(-(MAX_AI_HISTORY - 1));
+      const trimmedHistory = original
+        ? [original, ...keepTail]
+        : keepTail;
+
+      return {
+        ...ticket,
+        aiOutput: normalizedLatest,
+        aiOutputHistory: trimmedHistory,
+        aiOutputVersionCounter: maxVersion || normalizedLatest?.version,
+      };
+    });
+    set({ tickets: normalizedTickets, isHydrated: true });
   },
   createTicket: (input) => {
     const newTicket = createTicketRecord(input);
@@ -68,24 +126,42 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
   },
   saveAiOutput: (id, output) => {
     const currentTicket = get().tickets.find((ticket) => ticket.id === id);
-    const previousOutput = currentTicket?.aiOutput;
-    const existingHistory = currentTicket?.aiOutputHistory ?? [];
-    let nextHistory: TicketAiOutput[] | undefined;
-
-    if (previousOutput) {
-      const updatedHistory = [...existingHistory, previousOutput];
-      nextHistory = updatedHistory.slice(-5);
-    } else if (existingHistory.length > 0) {
-      nextHistory = existingHistory;
+    if (!currentTicket) {
+      return null;
     }
+
+    const baseVersion =
+      currentTicket.aiOutputVersionCounter ??
+      currentTicket.aiOutput?.version ??
+      0;
+    const nextVersion = baseVersion + 1;
+    const nextLatest: TicketAiOutput = { ...output, version: nextVersion };
+
+    const previousOutput = currentTicket.aiOutput;
+    const existingHistory = currentTicket.aiOutputHistory ?? [];
+    const nextHistory = previousOutput
+      ? [...existingHistory, previousOutput]
+      : existingHistory;
+
+    const uniqueByVersion = new Map<number, TicketAiOutput>();
+    nextHistory.forEach((item) => {
+      uniqueByVersion.set(item.version, item);
+    });
+    const normalizedHistory = Array.from(uniqueByVersion.values()).sort(
+      (a, b) => a.version - b.version,
+    );
+
+    const original = normalizedHistory.find((item) => item.version === 1);
+    const rest = normalizedHistory.filter((item) => item.version !== 1);
+    const keepTail = rest.slice(-(MAX_AI_HISTORY - 1));
+    const trimmedHistory = original ? [original, ...keepTail] : keepTail;
 
     const patch: Partial<Ticket> = {
-      aiOutput: output,
+      aiOutput: nextLatest,
+      aiOutputHistory: trimmedHistory,
+      aiOutputVersionCounter: nextVersion,
       status: "Resolved",
     };
-    if (nextHistory) {
-      patch.aiOutputHistory = nextHistory;
-    }
 
     const persistedTicket = updateTicketRecord(id, patch);
     if (!persistedTicket) {
@@ -102,8 +178,9 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
         }
         const nextTicket: Ticket = {
           ...ticket,
-          aiOutput: output,
-          aiOutputHistory: nextHistory ?? ticket.aiOutputHistory,
+          aiOutput: nextLatest,
+          aiOutputHistory: trimmedHistory,
+          aiOutputVersionCounter: nextVersion,
           status: "Resolved",
           updatedAt: now,
         };
@@ -128,7 +205,7 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
     let nextHistory = history;
     if (currentTicket.aiOutput) {
       const updatedHistory = [...history, currentTicket.aiOutput];
-      nextHistory = updatedHistory.slice(-5);
+      nextHistory = updatedHistory.slice(-MAX_AI_HISTORY);
     }
 
     const persistedTicket = updateTicketRecord(id, {

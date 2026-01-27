@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
@@ -105,7 +105,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const [replyCopied, setReplyCopied] = useState(false);
   const [replyCopyError, setReplyCopyError] = useState<string | null>(null);
   const [selectedAi, setSelectedAi] = useState<
-    { kind: "latest" } | { kind: "history"; version: number }
+    { kind: "latest" } | { kind: "version"; version: number }
   >({ kind: "latest" });
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,22 +125,38 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
 
   const historyOutputs = ticket?.aiOutputHistory ?? [];
   const latestOutput = ticket?.aiOutput ?? null;
+  const allVersions = useMemo(() => {
+    const versions: TicketAiOutput[] = [];
+    if (latestOutput) {
+      versions.push(latestOutput);
+    }
+    if (historyOutputs.length > 0) {
+      historyOutputs.forEach((item) => versions.push(item));
+    }
+    const uniqueByVersion = new Map<number, TicketAiOutput>();
+    versions.forEach((item) => {
+      uniqueByVersion.set(item.version, item);
+    });
+    return Array.from(uniqueByVersion.values()).sort(
+      (a, b) => a.version - b.version,
+    );
+  }, [latestOutput, historyOutputs]);
   const displayedOutput =
     selectedAi.kind === "latest"
       ? latestOutput
-      : historyOutputs.find((item) => item.version === selectedAi.version) ??
+      : allVersions.find((item) => item.version === selectedAi.version) ??
         latestOutput;
-  const totalVersions = latestOutput ? historyOutputs.length + 1 : 0;
+  const totalVersions = latestOutput ? allVersions.length : 0;
   const shouldShowVersionSelector = totalVersions >= 2;
 
   useEffect(() => {
     if (
-      selectedAi.kind === "history" &&
-      !historyOutputs.find((item) => item.version === selectedAi.version)
+      selectedAi.kind === "version" &&
+      !allVersions.find((item) => item.version === selectedAi.version)
     ) {
       setSelectedAi({ kind: "latest" });
     }
-  }, [historyOutputs, selectedAi]);
+  }, [allVersions, selectedAi]);
 
   useEffect(() => {
     if (ticket?.aiOutput?.generatedAt) {
@@ -455,7 +471,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                 <p className="text-xs text-slate-500">
                   Selected:{" "}
                   {selectedAi.kind === "latest"
-                    ? `Latest (Version ${latestOutput?.version ?? "—"})`
+                    ? `LATEST (Version ${latestOutput?.version ?? "—"})`
                     : `Version ${selectedAi.version}`}
                 </p>
                 <div className="grid gap-3">
@@ -468,7 +484,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                       onClick={() => setSelectedAi({ kind: "latest" })}
                       disabled={aiState === "loading"}
                     >
-                      Latest (Version {latestOutput?.version ?? "—"})
+                      LATEST
                     </Button>
                     <span className="text-xs text-slate-500">
                       {latestOutput?.generatedAt
@@ -479,11 +495,11 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                         : ""}
                     </span>
                   </div>
-                  {historyOutputs.length > 0
-                    ? historyOutputs.map((version) => {
+                  {allVersions.length > 0
+                    ? allVersions.map((version) => {
                         const historyKeyBase = version.generatedAt ?? "history";
                         const isSelected =
-                          selectedAi.kind === "history" &&
+                          selectedAi.kind === "version" &&
                           selectedAi.version === version.version;
                         return (
                           <div
@@ -496,7 +512,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                                 variant={isSelected ? "primary" : "secondary"}
                                 onClick={() =>
                                   setSelectedAi({
-                                    kind: "history",
+                                    kind: "version",
                                     version: version.version,
                                   })
                                 }

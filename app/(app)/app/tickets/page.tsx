@@ -89,16 +89,16 @@ export default function TicketsPage() {
     !categoryFromQuery || categoryFromQuery === ALL_CATEGORIES
       ? "All categories"
       : categoryOptions.includes(categoryFromQuery as TicketCategory)
-        ? (categoryFromQuery as TicketCategory)
-        : "All categories";
+      ? (categoryFromQuery as TicketCategory)
+      : "All categories";
 
   const priorityFromQuery = searchParams.get("priority");
   const activePriorityFromQuery: PriorityFilter =
     !priorityFromQuery || priorityFromQuery === ALL_PRIORITIES
       ? "All priorities"
       : priorityOptions.includes(priorityFromQuery as TicketPriority)
-        ? (priorityFromQuery as TicketPriority)
-        : "All priorities";
+      ? (priorityFromQuery as TicketPriority)
+      : "All priorities";
 
   const searchValue = searchParams.get("q") ?? "";
   const sortFromQuery = searchParams.get("sort");
@@ -331,7 +331,9 @@ export default function TicketsPage() {
     }
 
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   };
 
   useEffect(() => {
@@ -363,22 +365,22 @@ export default function TicketsPage() {
     });
   };
 
-  const handleCategoryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleCategoryChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     const value = event.target.value;
     const nextCategory: CategoryFilter =
-      value === ALL_CATEGORIES
-        ? "All categories"
-        : (value as TicketCategory);
+      value === ALL_CATEGORIES ? "All categories" : (value as TicketCategory);
     setCategoryFilter(nextCategory);
     updateQuery({ category: nextCategory });
   };
 
-  const handlePriorityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handlePriorityChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     const value = event.target.value;
     const nextPriority: PriorityFilter =
-      value === ALL_PRIORITIES
-        ? "All priorities"
-        : (value as TicketPriority);
+      value === ALL_PRIORITIES ? "All priorities" : (value as TicketPriority);
     setPriorityFilter(nextPriority);
     updateQuery({ priority: nextPriority });
   };
@@ -444,7 +446,11 @@ export default function TicketsPage() {
       {hasActiveFilters ? (
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-600">
           <span>Active filters: {activeFiltersCount}</span>
-          <Button type="button" variant="secondary" onClick={handleClearFilters}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleClearFilters}
+          >
             Clear filters
           </Button>
         </div>

@@ -80,6 +80,10 @@ export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
   const isHydrated = useTicketsStore((state) => state.isHydrated);
   const hydrateTickets = useTicketsStore((state) => state.hydrateTickets);
+  const updateTicketStatus = useTicketsStore(
+    (state) => state.updateTicketStatus
+  );
+  const deleteTicket = useTicketsStore((state) => state.deleteTicket);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -127,6 +131,18 @@ export default function TicketsPage() {
   const activeAnsweredFromQuery: AnsweredFilter = isValidAnsweredParam
     ? (answeredFromQuery as AnsweredFilter)
     : ANSWERED_ALL;
+
+  const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+  type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
+  const pageSizeFromQuery = searchParams.get("pageSize");
+  const parsedPageSize = Number.parseInt(pageSizeFromQuery ?? "", 10);
+  const pageSize: PageSizeOption = PAGE_SIZE_OPTIONS.includes(
+    parsedPageSize as PageSizeOption
+  )
+    ? (parsedPageSize as PageSizeOption)
+    : 10;
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(
     activeCategoryFromQuery
@@ -296,16 +312,32 @@ export default function TicketsPage() {
     return list;
   }, [filteredTickets, sortOption]);
 
-  const PAGE_SIZE = 10;
   const totalTickets = sortedTickets.length;
-  const totalPages = Math.max(1, Math.ceil(totalTickets / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalTickets / pageSize));
   const pageFromQuery = searchParams.get("page");
   const parsedPage = Number.parseInt(pageFromQuery ?? "1", 10);
   const safePage = Number.isNaN(parsedPage) ? 1 : parsedPage;
   const currentPage = Math.min(Math.max(safePage, 1), totalPages);
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const endIndex = Math.min(startIndex + PAGE_SIZE, totalTickets);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalTickets);
   const paginatedTickets = sortedTickets.slice(startIndex, endIndex);
+
+  const pageItems = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    if (currentPage <= 3) {
+      return [1, 2, 3, "…", totalPages];
+    }
+    if (currentPage >= totalPages - 2) {
+      return [1, "…", totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, "…", currentPage, "…", totalPages];
+  }, [currentPage, totalPages]);
+
+  const allOnPageSelected =
+    paginatedTickets.length > 0 &&
+    paginatedTickets.every((ticket) => selectedIds.has(ticket.id));
 
   const updateQuery = (next: {
     status?: StatusFilter;
@@ -315,6 +347,7 @@ export default function TicketsPage() {
     q?: string;
     sort?: SortOption;
     page?: number;
+    pageSize?: number;
   }) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -376,6 +409,15 @@ export default function TicketsPage() {
       }
     }
 
+    if (next.pageSize !== undefined) {
+      const safeNextPageSize = PAGE_SIZE_OPTIONS.includes(
+        next.pageSize as PageSizeOption
+      )
+        ? next.pageSize
+        : 10;
+      params.set("pageSize", String(safeNextPageSize));
+    }
+
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
@@ -396,6 +438,19 @@ export default function TicketsPage() {
       updateQuery({ page: currentPage });
     }
   }, [pageFromQuery, parsedPage, totalPages, currentPage]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => (prev.size ? new Set() : prev));
+  }, [
+    currentPage,
+    activeFilter,
+    categoryFilter,
+    priorityFilter,
+    answeredFilter,
+    searchValue,
+    sortOption,
+    pageSize,
+  ]);
 
   const handleFilterChange = (status: StatusFilter) => {
     updateQuery({ status, page: 1 });
@@ -480,8 +535,48 @@ export default function TicketsPage() {
     updateQuery({ q: "", page: 1 });
   };
 
+  const handlePageSizeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const value = Number.parseInt(event.target.value, 10);
+    updateQuery({ pageSize: value, page: 1 });
+  };
+
   const handlePageChange = (nextPage: number) => {
     updateQuery({ page: nextPage });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (allOnPageSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(paginatedTickets.map((ticket) => ticket.id)));
+  };
+
+  const handleToggleTicket = (ticketId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) {
+        next.delete(ticketId);
+      } else {
+        next.add(ticketId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkStatusUpdate = (status: TicketStatus) => {
+    selectedIds.forEach((id) => updateTicketStatus(id, status));
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (!window.confirm("Delete selected tickets?")) {
+      return;
+    }
+    selectedIds.forEach((id) => deleteTicket(id));
+    setSelectedIds(new Set());
   };
 
   const hasSearch = searchValue.trim().length > 0;
@@ -660,6 +755,24 @@ export default function TicketsPage() {
             <option value="updated">Recently updated</option>
           </select>
         </div>
+        <div className="w-full sm:w-40">
+          <label className="sr-only" htmlFor="ticketPageSize">
+            Items per page
+          </label>
+          <select
+            id="ticketPageSize"
+            name="ticketPageSize"
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
+            value={pageSize}
+            onChange={handlePageSizeChange}
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size} per page
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:gap-4">
         <div className="w-full sm:w-56">
@@ -751,6 +864,46 @@ export default function TicketsPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          {paginatedTickets.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-slate-600">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                  checked={allOnPageSelected}
+                  onChange={handleToggleSelectAll}
+                />
+                <span>Select all on page</span>
+              </label>
+              {selectedIds.size > 0 ? (
+                <span>{selectedIds.size} selected</span>
+              ) : null}
+            </div>
+          ) : null}
+          {selectedIds.size > 0 ? (
+            <div className="flex min-w-0 flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => handleBulkStatusUpdate("Resolved")}
+              >
+                Mark as Resolved
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleBulkStatusUpdate("In Progress")}
+              >
+                Mark as In Progress
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleBulkDelete}
+              >
+                Delete selected
+              </Button>
+            </div>
+          ) : null}
           <div className="min-w-0 grid gap-4">
             {paginatedTickets.map((ticket) => (
               <Card
@@ -758,13 +911,22 @@ export default function TicketsPage() {
                 className="min-w-0 w-full max-w-full box-border overflow-hidden p-3 sm:p-6"
               >
                 <div className="flex min-w-0 flex-col items-start gap-2">
-                  <div className="min-w-0 w-full space-y-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">
-                      {ticket.title}
-                    </p>
-                    <p className="line-clamp-2 break-words text-sm text-slate-600 sm:truncate">
-                      {ticket.description}
-                    </p>
+                  <div className="flex min-w-0 w-full items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                      checked={selectedIds.has(ticket.id)}
+                      onChange={() => handleToggleTicket(ticket.id)}
+                      aria-label={`Select ticket ${ticket.title}`}
+                    />
+                    <div className="min-w-0 w-full space-y-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {ticket.title}
+                      </p>
+                      <p className="line-clamp-2 break-words text-sm text-slate-600 sm:truncate">
+                        {ticket.description}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex min-w-0 flex-wrap gap-2">
                     <button
@@ -831,6 +993,25 @@ export default function TicketsPage() {
               >
                 Previous
               </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {pageItems.map((item, index) =>
+                  typeof item === "number" ? (
+                    <Button
+                      key={`${item}-${index}`}
+                      type="button"
+                      variant={item === currentPage ? "primary" : "secondary"}
+                      aria-current={item === currentPage ? "page" : undefined}
+                      onClick={() => handlePageChange(item)}
+                    >
+                      {item}
+                    </Button>
+                  ) : (
+                    <span key={`ellipsis-${index}`} className="px-2">
+                      {item}
+                    </span>
+                  )
+                )}
+              </div>
               <span>
                 Page {currentPage} of {totalPages}
               </span>

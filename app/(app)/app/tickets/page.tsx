@@ -296,6 +296,17 @@ export default function TicketsPage() {
     return list;
   }, [filteredTickets, sortOption]);
 
+  const PAGE_SIZE = 10;
+  const totalTickets = sortedTickets.length;
+  const totalPages = Math.max(1, Math.ceil(totalTickets / PAGE_SIZE));
+  const pageFromQuery = searchParams.get("page");
+  const parsedPage = Number.parseInt(pageFromQuery ?? "1", 10);
+  const safePage = Number.isNaN(parsedPage) ? 1 : parsedPage;
+  const currentPage = Math.min(Math.max(safePage, 1), totalPages);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, totalTickets);
+  const paginatedTickets = sortedTickets.slice(startIndex, endIndex);
+
   const updateQuery = (next: {
     status?: StatusFilter;
     category?: CategoryFilter;
@@ -303,6 +314,7 @@ export default function TicketsPage() {
     answered?: AnsweredFilter;
     q?: string;
     sort?: SortOption;
+    page?: number;
   }) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -353,6 +365,17 @@ export default function TicketsPage() {
       }
     }
 
+    if (next.page !== undefined) {
+      const safeNextPage = Number.isFinite(next.page)
+        ? Math.max(1, Math.floor(next.page))
+        : 1;
+      if (safeNextPage <= 1) {
+        params.delete("page");
+      } else {
+        params.set("page", String(safeNextPage));
+      }
+    }
+
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
@@ -365,13 +388,22 @@ export default function TicketsPage() {
     }
   }, [isValidAnsweredParam]);
 
+  useEffect(() => {
+    if (!pageFromQuery) {
+      return;
+    }
+    if (Number.isNaN(parsedPage) || parsedPage < 1 || parsedPage > totalPages) {
+      updateQuery({ page: currentPage });
+    }
+  }, [pageFromQuery, parsedPage, totalPages, currentPage]);
+
   const handleFilterChange = (status: StatusFilter) => {
-    updateQuery({ status });
+    updateQuery({ status, page: 1 });
   };
 
   const handleAnsweredChange = (next: AnsweredFilter) => {
     setAnsweredFilter(next);
-    updateQuery({ answered: next });
+    updateQuery({ answered: next, page: 1 });
   };
 
   const handleClearFilters = () => {
@@ -385,34 +417,35 @@ export default function TicketsPage() {
       answered: ANSWERED_ALL,
       q: "",
       sort: "newest",
+      page: 1,
     });
   };
 
   const handleRemoveStatusFilter = () => {
-    updateQuery({ status: "All" });
+    updateQuery({ status: "All", page: 1 });
   };
 
   const handleRemoveCategoryFilter = () => {
     setCategoryFilter("All categories");
-    updateQuery({ category: "All categories" });
+    updateQuery({ category: "All categories", page: 1 });
   };
 
   const handleRemovePriorityFilter = () => {
     setPriorityFilter("All priorities");
-    updateQuery({ priority: "All priorities" });
+    updateQuery({ priority: "All priorities", page: 1 });
   };
 
   const handleRemoveAnsweredFilter = () => {
     setAnsweredFilter(ANSWERED_ALL);
-    updateQuery({ answered: ANSWERED_ALL });
+    updateQuery({ answered: ANSWERED_ALL, page: 1 });
   };
 
   const handleRemoveSearchFilter = () => {
-    updateQuery({ q: "" });
+    updateQuery({ q: "", page: 1 });
   };
 
   const handleRemoveSortFilter = () => {
-    updateQuery({ sort: "newest" });
+    updateQuery({ sort: "newest", page: 1 });
   };
 
   const handleCategoryChange = (
@@ -422,7 +455,7 @@ export default function TicketsPage() {
     const nextCategory: CategoryFilter =
       value === ALL_CATEGORIES ? "All categories" : (value as TicketCategory);
     setCategoryFilter(nextCategory);
-    updateQuery({ category: nextCategory });
+    updateQuery({ category: nextCategory, page: 1 });
   };
 
   const handlePriorityChange = (
@@ -432,19 +465,23 @@ export default function TicketsPage() {
     const nextPriority: PriorityFilter =
       value === ALL_PRIORITIES ? "All priorities" : (value as TicketPriority);
     setPriorityFilter(nextPriority);
-    updateQuery({ priority: nextPriority });
+    updateQuery({ priority: nextPriority, page: 1 });
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    updateQuery({ q: event.target.value });
+    updateQuery({ q: event.target.value, page: 1 });
   };
 
   const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    updateQuery({ sort: event.target.value as SortOption });
+    updateQuery({ sort: event.target.value as SortOption, page: 1 });
   };
 
   const handleClearSearch = () => {
-    updateQuery({ q: "" });
+    updateQuery({ q: "", page: 1 });
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    updateQuery({ page: nextPage });
   };
 
   const hasSearch = searchValue.trim().length > 0;
@@ -713,43 +750,100 @@ export default function TicketsPage() {
           />
         </Card>
       ) : (
-        <div className="min-w-0 grid gap-4">
-          {sortedTickets.map((ticket) => (
-            <Card
-              key={ticket.id}
-              className="min-w-0 w-full max-w-full box-border overflow-hidden p-3 sm:p-6"
-            >
-              <div className="flex min-w-0 flex-col items-start gap-2">
-                <div className="min-w-0 w-full space-y-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {ticket.title}
-                  </p>
-                  <p className="line-clamp-2 break-words text-sm text-slate-600 sm:truncate">
-                    {ticket.description}
-                  </p>
+        <div className="space-y-4">
+          <div className="min-w-0 grid gap-4">
+            {paginatedTickets.map((ticket) => (
+              <Card
+                key={ticket.id}
+                className="min-w-0 w-full max-w-full box-border overflow-hidden p-3 sm:p-6"
+              >
+                <div className="flex min-w-0 flex-col items-start gap-2">
+                  <div className="min-w-0 w-full space-y-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {ticket.title}
+                    </p>
+                    <p className="line-clamp-2 break-words text-sm text-slate-600 sm:truncate">
+                      {ticket.description}
+                    </p>
+                  </div>
+                  <div className="flex min-w-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                      aria-label={`Filter by status ${ticket.status}`}
+                      onClick={() => handleFilterChange(ticket.status)}
+                    >
+                      <Badge variant={statusVariantMap[ticket.status]}>
+                        {ticket.status}
+                      </Badge>
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                      aria-label={`Filter by priority ${ticket.priority}`}
+                      onClick={() => {
+                        setPriorityFilter(ticket.priority);
+                        updateQuery({ priority: ticket.priority, page: 1 });
+                      }}
+                    >
+                      <Badge variant={priorityVariantMap[ticket.priority]}>
+                        {ticket.priority} priority
+                      </Badge>
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                      aria-label={`Filter by ${ticket.aiOutput ? "answered" : "pending"} AI status`}
+                      onClick={() =>
+                        handleAnsweredChange(
+                          ticket.aiOutput ? ANSWERED_ANSWERED : ANSWERED_PENDING
+                        )
+                      }
+                    >
+                      <Badge variant={ticket.aiOutput ? "success" : "default"}>
+                        {ticket.aiOutput ? "Answered" : "Pending"}
+                      </Badge>
+                    </button>
+                  </div>
+                  <div className="w-full pt-2">
+                    <ButtonLink
+                      href={`/app/tickets/${ticket.id}`}
+                      className="inline-block"
+                    >
+                      View ticket
+                    </ButtonLink>
+                  </div>
                 </div>
-                <div className="flex min-w-0 flex-wrap gap-2">
-                  <Badge variant={statusVariantMap[ticket.status]}>
-                    {ticket.status}
-                  </Badge>
-                  <Badge variant={priorityVariantMap[ticket.priority]}>
-                    {ticket.priority} priority
-                  </Badge>
-                  <Badge variant={ticket.aiOutput ? "success" : "default"}>
-                    {ticket.aiOutput ? "Answered" : "Pending"}
-                  </Badge>
-                </div>
-                <div className="w-full pt-2">
-                  <ButtonLink
-                    href={`/app/tickets/${ticket.id}`}
-                    className="inline-block"
-                  >
-                    View ticket
-                  </ButtonLink>
-                </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+            <span>
+              Showing {totalTickets === 0 ? 0 : startIndex + 1}–{endIndex} of{" "}
+              {totalTickets}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage <= 1}
+              >
+                Previous
+              </Button>
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

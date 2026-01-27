@@ -59,7 +59,7 @@ const categoryOptions: TicketCategory[] = [
 
 const priorityOptions: TicketPriority[] = ["Low", "Medium", "High", "Urgent"];
 
-type StatusFilter = "All" | TicketStatus;
+type StatusFilter = "All" | "Active" | TicketStatus;
 
 type SortOption = "newest" | "oldest" | "priority" | "updated";
 
@@ -68,6 +68,13 @@ type CategoryFilter = "All categories" | TicketCategory;
 type PriorityFilter = "All priorities" | TicketPriority;
 
 type AnsweredFilter = "all" | "pending" | "answered";
+
+const sortOptionLabels: Record<SortOption, string> = {
+  newest: "Newest",
+  oldest: "Oldest",
+  priority: "Priority",
+  updated: "Recently updated",
+};
 
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
@@ -79,9 +86,11 @@ export default function TicketsPage() {
 
   const statusFromQuery = searchParams.get("status");
   const activeFilter: StatusFilter =
-    statusFromQuery === "Open" ||
-    statusFromQuery === "In Progress" ||
-    statusFromQuery === "Resolved"
+    statusFromQuery === "active"
+      ? "Active"
+      : statusFromQuery === "Open" ||
+        statusFromQuery === "In Progress" ||
+        statusFromQuery === "Resolved"
       ? statusFromQuery
       : "All";
 
@@ -140,7 +149,7 @@ export default function TicketsPage() {
   }, [activeCategoryFromQuery, activePriorityFromQuery, activeAnsweredFromQuery]);
 
   const counts = useMemo(() => {
-    return tickets.reduce(
+    const base = tickets.reduce(
       (acc, ticket) => {
         acc.All += 1;
         acc[ticket.status] += 1;
@@ -153,6 +162,10 @@ export default function TicketsPage() {
         Resolved: 0,
       }
     );
+    return {
+      ...base,
+      Active: base.Open + base["In Progress"],
+    };
   }, [tickets]);
 
   const answeredCounts = useMemo(() => {
@@ -208,7 +221,12 @@ export default function TicketsPage() {
 
   const filteredTickets = useMemo(() => {
     let list = tickets;
-    if (activeFilter !== "All") {
+    if (activeFilter === "Active") {
+      list = list.filter(
+        (ticket) =>
+          ticket.status === "Open" || ticket.status === "In Progress"
+      );
+    } else if (activeFilter !== "All") {
       list = list.filter((ticket) => ticket.status === activeFilter);
     }
     if (categoryFilter !== "All categories") {
@@ -291,6 +309,8 @@ export default function TicketsPage() {
     if (next.status !== undefined) {
       if (next.status === "All") {
         params.delete("status");
+      } else if (next.status === "Active") {
+        params.set("status", "active");
       } else {
         params.set("status", next.status);
       }
@@ -368,6 +388,33 @@ export default function TicketsPage() {
     });
   };
 
+  const handleRemoveStatusFilter = () => {
+    updateQuery({ status: "All" });
+  };
+
+  const handleRemoveCategoryFilter = () => {
+    setCategoryFilter("All categories");
+    updateQuery({ category: "All categories" });
+  };
+
+  const handleRemovePriorityFilter = () => {
+    setPriorityFilter("All priorities");
+    updateQuery({ priority: "All priorities" });
+  };
+
+  const handleRemoveAnsweredFilter = () => {
+    setAnsweredFilter(ANSWERED_ALL);
+    updateQuery({ answered: ANSWERED_ALL });
+  };
+
+  const handleRemoveSearchFilter = () => {
+    updateQuery({ q: "" });
+  };
+
+  const handleRemoveSortFilter = () => {
+    updateQuery({ sort: "newest" });
+  };
+
   const handleCategoryChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
@@ -401,6 +448,7 @@ export default function TicketsPage() {
   };
 
   const hasSearch = searchValue.trim().length > 0;
+  const hasNonSearchFilters = activeFiltersCount > (hasSearch ? 1 : 0);
 
   return (
     <div className="min-w-0 w-full max-w-full overflow-x-hidden space-y-6">
@@ -415,18 +463,18 @@ export default function TicketsPage() {
         }
       />
       <div className="flex min-w-0 flex-wrap gap-2">
-        {(["All", "Open", "In Progress", "Resolved"] as StatusFilter[]).map(
-          (status) => (
-            <Button
-              key={status}
-              type="button"
-              variant={activeFilter === status ? "primary" : "secondary"}
-              onClick={() => handleFilterChange(status)}
-            >
-              {status} ({counts[status]})
-            </Button>
-          )
-        )}
+        {(
+          ["All", "Active", "Open", "In Progress", "Resolved"] as StatusFilter[]
+        ).map((status) => (
+          <Button
+            key={status}
+            type="button"
+            variant={activeFilter === status ? "primary" : "secondary"}
+            onClick={() => handleFilterChange(status)}
+          >
+            {status} ({counts[status]})
+          </Button>
+        ))}
       </div>
       <div className="flex min-w-0 flex-wrap gap-2">
         {(
@@ -446,16 +494,101 @@ export default function TicketsPage() {
           </Button>
         ))}
       </div>
-      {hasActiveFilters ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-600">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-600">
+        {hasActiveFilters ? (
           <span>Active filters: {activeFiltersCount}</span>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleClearFilters}
-          >
-            Clear filters
-          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleClearFilters}
+          disabled={!hasActiveFilters}
+        >
+          Clear filters
+        </Button>
+      </div>
+      {hasActiveFilters ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {activeFilter !== "All" ? (
+            <Badge className="gap-2 pr-1">
+              Status: {activeFilter}
+              <button
+                type="button"
+                aria-label="Remove status filter"
+                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                onClick={handleRemoveStatusFilter}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {categoryFilter !== "All categories" ? (
+            <Badge className="gap-2 pr-1">
+              Category: {categoryFilter}
+              <button
+                type="button"
+                aria-label="Remove category filter"
+                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                onClick={handleRemoveCategoryFilter}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {priorityFilter !== "All priorities" ? (
+            <Badge className="gap-2 pr-1">
+              Priority: {priorityFilter}
+              <button
+                type="button"
+                aria-label="Remove priority filter"
+                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                onClick={handleRemovePriorityFilter}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {answeredFilter !== "all" ? (
+            <Badge className="gap-2 pr-1">
+              AI: {answeredFilter === "answered" ? "Answered" : "Pending"}
+              <button
+                type="button"
+                aria-label="Remove AI filter"
+                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                onClick={handleRemoveAnsweredFilter}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {hasSearch ? (
+            <Badge className="gap-2 pr-1">
+              <span className="max-w-[200px] truncate">
+                Search: {searchValue.trim()}
+              </span>
+              <button
+                type="button"
+                aria-label="Remove search filter"
+                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                onClick={handleRemoveSearchFilter}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
+          {sortOption !== "newest" ? (
+            <Badge className="gap-2 pr-1">
+              Sort: {sortOptionLabels[sortOption]}
+              <button
+                type="button"
+                aria-label="Remove sort filter"
+                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                onClick={handleRemoveSortFilter}
+              >
+                ×
+              </button>
+            </Badge>
+          ) : null}
         </div>
       ) : null}
       <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
@@ -553,13 +686,24 @@ export default function TicketsPage() {
             description={
               hasSearch
                 ? "No tickets match your search. Try a different query or clear the search."
+                : hasNonSearchFilters
+                ? "No tickets match the current filters. Try adjusting the filters or create a new ticket."
                 : "No tickets match the current filter. Try another status or create a new ticket."
             }
             action={
-              hasSearch ? (
-                <Button variant="secondary" onClick={handleClearSearch}>
-                  Clear search
-                </Button>
+              hasSearch || hasNonSearchFilters ? (
+                <div className="flex flex-wrap gap-2">
+                  {hasSearch ? (
+                    <Button variant="secondary" onClick={handleClearSearch}>
+                      Clear search
+                    </Button>
+                  ) : null}
+                  {hasNonSearchFilters ? (
+                    <Button variant="secondary" onClick={handleClearFilters}>
+                      Clear filters
+                    </Button>
+                  ) : null}
+                </div>
               ) : (
                 <ButtonLink href="/app/tickets/new">
                   Create a new ticket

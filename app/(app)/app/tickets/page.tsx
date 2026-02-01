@@ -76,6 +76,8 @@ const sortOptionLabels: Record<SortOption, string> = {
   updated: "Recently updated",
 };
 
+const PAGE_SIZE = 10;
+
 export default function TicketsPage() {
   const tickets = useTicketsStore((state) => state.tickets);
   const isHydrated = useTicketsStore((state) => state.isHydrated);
@@ -131,16 +133,6 @@ export default function TicketsPage() {
   const activeAnsweredFromQuery: AnsweredFilter = isValidAnsweredParam
     ? (answeredFromQuery as AnsweredFilter)
     : ANSWERED_ALL;
-
-  const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
-  type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
-  const pageSizeFromQuery = searchParams.get("pageSize");
-  const parsedPageSize = Number.parseInt(pageSizeFromQuery ?? "", 10);
-  const pageSize: PageSizeOption = PAGE_SIZE_OPTIONS.includes(
-    parsedPageSize as PageSizeOption
-  )
-    ? (parsedPageSize as PageSizeOption)
-    : 10;
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -313,13 +305,13 @@ export default function TicketsPage() {
   }, [filteredTickets, sortOption]);
 
   const totalTickets = sortedTickets.length;
-  const totalPages = Math.max(1, Math.ceil(totalTickets / pageSize));
+  const totalPages = Math.max(1, Math.ceil(totalTickets / PAGE_SIZE));
   const pageFromQuery = searchParams.get("page");
   const parsedPage = Number.parseInt(pageFromQuery ?? "1", 10);
   const safePage = Number.isNaN(parsedPage) ? 1 : parsedPage;
   const currentPage = Math.min(Math.max(safePage, 1), totalPages);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalTickets);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, totalTickets);
   const paginatedTickets = sortedTickets.slice(startIndex, endIndex);
 
   const pageItems = useMemo(() => {
@@ -347,9 +339,9 @@ export default function TicketsPage() {
     q?: string;
     sort?: SortOption;
     page?: number;
-    pageSize?: number;
   }) => {
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("pageSize");
 
     if (next.status !== undefined) {
       if (next.status === "All") {
@@ -409,15 +401,6 @@ export default function TicketsPage() {
       }
     }
 
-    if (next.pageSize !== undefined) {
-      const safeNextPageSize = PAGE_SIZE_OPTIONS.includes(
-        next.pageSize as PageSizeOption
-      )
-        ? next.pageSize
-        : 10;
-      params.set("pageSize", String(safeNextPageSize));
-    }
-
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
@@ -449,7 +432,6 @@ export default function TicketsPage() {
     answeredFilter,
     searchValue,
     sortOption,
-    pageSize,
   ]);
 
   const handleFilterChange = (status: StatusFilter) => {
@@ -535,13 +517,6 @@ export default function TicketsPage() {
     updateQuery({ q: "", page: 1 });
   };
 
-  const handlePageSizeChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const value = Number.parseInt(event.target.value, 10);
-    updateQuery({ pageSize: value, page: 1 });
-  };
-
   const handlePageChange = (nextPage: number) => {
     updateQuery({ page: nextPage });
   };
@@ -581,6 +556,31 @@ export default function TicketsPage() {
 
   const hasSearch = searchValue.trim().length > 0;
   const hasNonSearchFilters = activeFiltersCount > (hasSearch ? 1 : 0);
+
+  const resultsCount = filteredTickets.length;
+
+  const handleResetStatus = () => {
+    updateQuery({ status: "All", page: 1 });
+  };
+
+  const handleResetAnswered = () => {
+    setAnsweredFilter(ANSWERED_ALL);
+    updateQuery({ answered: ANSWERED_ALL, page: 1 });
+  };
+
+  const handleResetCategory = () => {
+    setCategoryFilter("All categories");
+    updateQuery({ category: "All categories", page: 1 });
+  };
+
+  const handleResetPriority = () => {
+    setPriorityFilter("All priorities");
+    updateQuery({ priority: "All priorities", page: 1 });
+  };
+
+  const handleResetSort = () => {
+    updateQuery({ sort: "newest", page: 1 });
+  };
 
   return (
     <div className="min-w-0 w-full max-w-full overflow-x-hidden space-y-6">
@@ -627,6 +627,7 @@ export default function TicketsPage() {
         ))}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-600">
+        <span>{resultsCount} results</span>
         {hasActiveFilters ? (
           <span>Active filters: {activeFiltersCount}</span>
         ) : null}
@@ -639,6 +640,56 @@ export default function TicketsPage() {
           Clear filters
         </Button>
       </div>
+      {hasActiveFilters ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-500">Quick reset</span>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 px-2 text-xs"
+            onClick={handleResetStatus}
+            disabled={activeFilter === "All"}
+          >
+            Reset status
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 px-2 text-xs"
+            onClick={handleResetAnswered}
+            disabled={answeredFilter === "all"}
+          >
+            Reset AI
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 px-2 text-xs"
+            onClick={handleResetCategory}
+            disabled={categoryFilter === "All categories"}
+          >
+            Reset category
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 px-2 text-xs"
+            onClick={handleResetPriority}
+            disabled={priorityFilter === "All priorities"}
+          >
+            Reset priority
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 px-2 text-xs"
+            onClick={handleResetSort}
+            disabled={sortOption === "newest"}
+          >
+            Reset sort
+          </Button>
+        </div>
+      ) : null}
       {hasActiveFilters ? (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {activeFilter !== "All" ? (
@@ -755,24 +806,6 @@ export default function TicketsPage() {
             <option value="updated">Recently updated</option>
           </select>
         </div>
-        <div className="w-full sm:w-40">
-          <label className="sr-only" htmlFor="ticketPageSize">
-            Items per page
-          </label>
-          <select
-            id="ticketPageSize"
-            name="ticketPageSize"
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-0 sm:focus-visible:ring-offset-2 ring-offset-white"
-            value={pageSize}
-            onChange={handlePageSizeChange}
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size} per page
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
       <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:gap-4">
         <div className="w-full sm:w-56">
@@ -834,14 +867,20 @@ export default function TicketsPage() {
           <EmptyState
             title="No tickets found"
             description={
-              hasSearch
+              tickets.length === 0
+                ? "No tickets yet. Create a new ticket to get started."
+                : hasSearch
                 ? "No tickets match your search. Try a different query or clear the search."
                 : hasNonSearchFilters
-                ? "No tickets match the current filters. Try adjusting the filters or create a new ticket."
+                ? "No tickets match the current filters. Try adjusting the filters or clear them."
                 : "No tickets match the current filter. Try another status or create a new ticket."
             }
             action={
-              hasSearch || hasNonSearchFilters ? (
+              tickets.length === 0 ? (
+                <ButtonLink href="/app/tickets/new">
+                  Create a new ticket
+                </ButtonLink>
+              ) : hasSearch || hasNonSearchFilters ? (
                 <div className="flex flex-wrap gap-2">
                   {hasSearch ? (
                     <Button variant="secondary" onClick={handleClearSearch}>
@@ -891,9 +930,9 @@ export default function TicketsPage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => handleBulkStatusUpdate("In Progress")}
+                onClick={() => handleBulkStatusUpdate("Open")}
               >
-                Mark as In Progress
+                Mark as Open
               </Button>
               <Button
                 type="button"

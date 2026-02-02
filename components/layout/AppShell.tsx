@@ -29,7 +29,7 @@ export function AppShell({ children }: AppShellProps) {
             currentPath={pathname}
           />
           <main className="flex-1 bg-gradient-to-b from-transparent via-transparent to-transparent">
-            <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 space-y-6">
+            <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-10 min-w-0 space-y-6">
               {children}
             </div>
           </main>

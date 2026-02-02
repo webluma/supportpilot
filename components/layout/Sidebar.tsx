@@ -56,7 +56,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex items-center justify-between">
           <Link
             href="/app"
-            className="text-lg font-semibold text-slate-900"
+            className="truncate text-lg font-semibold text-slate-900"
             onClick={onClose}
           >
             SupportPilot

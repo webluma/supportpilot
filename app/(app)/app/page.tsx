@@ -43,7 +43,7 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 items-stretch">
         {[
           { label: "Open", value: metrics.open },
           { label: "In Progress", value: metrics.inProgress },
@@ -95,9 +95,9 @@ export default function DashboardPage() {
               {recentTickets.map((ticket) => (
                 <div
                   key={ticket.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  className="flex flex-nowrap items-center gap-4 py-3"
                 >
-                  <div className="min-w-0 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <p className="truncate text-sm font-semibold text-slate-900">
                       {ticket.title}
                     </p>
@@ -105,9 +105,13 @@ export default function DashboardPage() {
                       {ticket.description}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <Badge variant="default">{ticket.status}</Badge>
-                    <Badge variant="default">{ticket.priority}</Badge>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-slate-600">
+                    <Badge variant="default" className="shrink-0">
+                      {ticket.status}
+                    </Badge>
+                    <Badge variant="default" className="shrink-0">
+                      {ticket.priority}
+                    </Badge>
                   </div>
                 </div>
               ))}

@@ -22,8 +22,8 @@ function resolveTitle(path?: string | null) {
 export function Topbar({ isMenuOpen, onMenuClick, currentPath }: TopbarProps) {
   const currentTitle = resolveTitle(currentPath);
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center border-b border-slate-200 bg-white/80 px-4 sm:px-6 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
+    <header className="sticky top-0 z-20 flex h-16 items-center border-b border-slate-200 bg-white/80 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -38,7 +38,7 @@ export function Topbar({ isMenuOpen, onMenuClick, currentPath }: TopbarProps) {
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               SupportPilot
             </p>
-            <p className="text-base font-semibold text-slate-900">
+            <p className="text-base font-semibold text-slate-900 truncate max-w-[220px] sm:max-w-none">
               {currentTitle}
             </p>
           </div>

@@ -834,10 +834,12 @@ export default function TicketsPage() {
           </Button>
         ))}
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-600">
+      <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-slate-700">
         <span>{resultsCount} results</span>
         {hasActiveFilters ? (
-          <span>Active filters: {activeFiltersCount}</span>
+          <span className="text-slate-600">
+            Active filters: {activeFiltersCount}
+          </span>
         ) : null}
         <Button
           type="button"

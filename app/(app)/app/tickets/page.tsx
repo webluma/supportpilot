@@ -86,6 +86,7 @@ export default function TicketsPage() {
     (state) => state.updateTicketStatus
   );
   const deleteTicket = useTicketsStore((state) => state.deleteTicket);
+  const saveAiOutput = useTicketsStore((state) => state.saveAiOutput);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -422,11 +423,11 @@ export default function TicketsPage() {
     }
   }, [pageFromQuery, parsedPage, totalPages, currentPage]);
 
-useEffect(() => {
-  setSelectedIds((prev) => (prev.size ? new Set() : prev));
-}, [
-  currentPage,
-  activeFilter,
+  useEffect(() => {
+    setSelectedIds((prev) => (prev.size ? new Set() : prev));
+  }, [
+    currentPage,
+    activeFilter,
   categoryFilter,
   priorityFilter,
   answeredFilter,
@@ -434,16 +435,21 @@ useEffect(() => {
   sortOption,
 ]);
 
-useEffect(() => {
-  if (selectedIds.size === 0) return;
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      setSelectedIds(new Set());
-    }
-  };
-  window.addEventListener("keydown", onKeyDown);
-  return () => window.removeEventListener("keydown", onKeyDown);
-}, [selectedIds]);
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedIds(new Set());
+        setBulkAiState((prev) =>
+          prev.status === "running"
+            ? prev
+            : { ...prev, failed: [], total: 0, processed: 0, success: 0, skipped: 0, status: "idle", globalError: null }
+        );
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedIds]);
 
   const handleFilterChange = (status: StatusFilter) => {
     updateQuery({ status, page: 1 });
@@ -552,15 +558,15 @@ useEffect(() => {
     });
   };
 
-const handleBulkStatusUpdate = (status: TicketStatus) => {
-  selectedIds.forEach((id) => updateTicketStatus(id, status));
-  setSelectedIds(new Set());
-};
+  const handleBulkStatusUpdate = (status: TicketStatus) => {
+    selectedIds.forEach((id) => updateTicketStatus(id, status));
+    setSelectedIds(new Set());
+  };
 
-const handleBulkDelete = () => {
-  if (!window.confirm("Delete selected tickets?")) {
-    return;
-  }
+  const handleBulkDelete = () => {
+    if (!window.confirm("Delete selected tickets?")) {
+      return;
+    }
   const toRemove = selectedIds.size;
   selectedIds.forEach((id) => deleteTicket(id));
   setSelectedIds(new Set());
@@ -575,6 +581,26 @@ const handleBulkDelete = () => {
   const hasNonSearchFilters = activeFiltersCount > (hasSearch ? 1 : 0);
 
   const resultsCount = filteredTickets.length;
+
+  const [bulkAiState, setBulkAiState] = useState<{
+    status: "idle" | "running" | "error";
+    total: number;
+    processed: number;
+    success: number;
+    failed: Array<{ id: string; message: string; status?: number }>;
+    skipped: number;
+    globalError?: string | null;
+  }>({
+    status: "idle",
+    total: 0,
+    processed: 0,
+    success: 0,
+    failed: [],
+    skipped: 0,
+    globalError: null,
+  });
+
+  const isGenerating = bulkAiState.status === "running";
 
   const handleResetStatus = () => {
     updateQuery({ status: "All", page: 1 });
@@ -597,6 +623,171 @@ const handleBulkDelete = () => {
 
   const handleResetSort = () => {
     updateQuery({ sort: "newest", page: 1 });
+  };
+
+  const handleBulkGenerate = async (ticketIds: string[]) => {
+    const pendingTickets = ticketIds
+      .map((id) => tickets.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+      .filter((t) => !t.aiOutput);
+
+    const skipped = ticketIds.length - pendingTickets.length;
+    if (pendingTickets.length === 0) {
+      setSelectedIds(new Set());
+      setBulkAiState({
+        status: "idle",
+        total: 0,
+        processed: 0,
+        success: 0,
+        failed: [],
+        skipped,
+        globalError: null,
+      });
+      return;
+    }
+
+    const CONCURRENCY = 2;
+    const queue = [...pendingTickets];
+    let abortAll = false;
+
+    setBulkAiState({
+      status: "running",
+      total: pendingTickets.length,
+      processed: 0,
+      success: 0,
+      failed: [],
+      skipped,
+      globalError: null,
+    });
+
+    const processTicket = async (ticketId: string) => {
+      const ticket = tickets.find((t) => t.id === ticketId);
+      if (!ticket || ticket.aiOutput) {
+        return;
+      }
+
+      try {
+        const ticketForAi = { ...ticket, aiOutput: undefined };
+        const response = await fetch("/api/ai/ticket-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticket: ticketForAi }),
+        });
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            abortAll = true;
+            const errorText =
+              "OpenAI authentication failed. Check OPENAI_API_KEY.";
+            setBulkAiState((prev) => ({
+              ...prev,
+              status: "error",
+              globalError: errorText,
+            }));
+            return;
+          }
+          if (response.status === 429) {
+            const message =
+              "Rate limit or quota reached. Retry after a short pause.";
+            setBulkAiState((prev) => ({
+              ...prev,
+              processed: prev.processed + 1,
+              failed: [
+                ...prev.failed,
+                { id: ticketId, message, status: response.status },
+              ],
+            }));
+            return;
+          }
+
+          const message = `AI request failed (status ${response.status}).`;
+          setBulkAiState((prev) => ({
+            ...prev,
+            processed: prev.processed + 1,
+            failed: [
+              ...prev.failed,
+              { id: ticketId, message, status: response.status },
+            ],
+          }));
+          return;
+        }
+
+        const json = (await response.json()) as {
+          customerReply?: string;
+          qaSummary?: string;
+          followUpQuestions?: string[];
+        };
+
+        if (
+          !json ||
+          !json.customerReply ||
+          !json.qaSummary ||
+          !Array.isArray(json.followUpQuestions)
+        ) {
+          setBulkAiState((prev) => ({
+            ...prev,
+            processed: prev.processed + 1,
+            failed: [
+              ...prev.failed,
+              { id: ticketId, message: "Invalid AI response format." },
+            ],
+          }));
+          return;
+        }
+
+        saveAiOutput(ticketId, {
+          customerReply: json.customerReply,
+          qaSummary: json.qaSummary,
+          followUpQuestions: json.followUpQuestions,
+          generatedAt: new Date().toISOString(),
+          model: "gpt-5-nano",
+        });
+
+        setBulkAiState((prev) => ({
+          ...prev,
+          processed: prev.processed + 1,
+          success: prev.success + 1,
+        }));
+      } catch (error) {
+        setBulkAiState((prev) => ({
+          ...prev,
+          processed: prev.processed + 1,
+          failed: [
+            ...prev.failed,
+            { id: ticketId, message: "AI request failed. Please retry." },
+          ],
+        }));
+      }
+    };
+
+    const worker = async () => {
+      while (queue.length && !abortAll) {
+        const next = queue.shift();
+        if (next) {
+          await processTicket(next.id);
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: CONCURRENCY }).map(() => worker())
+    );
+
+    if (!abortAll) {
+      setSelectedIds(new Set());
+      setBulkAiState((prev) => ({
+        ...prev,
+        status: prev.failed.length > 0 ? "error" : "idle",
+      }));
+    }
+  };
+
+  const handleRetryFailed = () => {
+    const retryIds = bulkAiState.failed.map((item) => item.id);
+    if (retryIds.length === 0) {
+      return;
+    }
+    handleBulkGenerate(retryIds);
   };
 
   return (
@@ -944,13 +1135,14 @@ const handleBulkDelete = () => {
                 variant="secondary"
                 onClick={() => setSelectedIds(new Set())}
                 aria-label="Clear selection"
+                disabled={isGenerating}
               >
                 Clear selection
               </Button>
               <Button
                 type="button"
                 onClick={() => handleBulkStatusUpdate("In Progress")}
-                disabled={!isHydrated || selectedIds.size === 0}
+                disabled={!isHydrated || selectedIds.size === 0 || isGenerating}
                 aria-label="Mark selected as In Progress"
               >
                 Mark as In Progress
@@ -959,7 +1151,7 @@ const handleBulkDelete = () => {
                 type="button"
                 variant="secondary"
                 onClick={() => handleBulkStatusUpdate("Resolved")}
-                disabled={!isHydrated || selectedIds.size === 0}
+                disabled={!isHydrated || selectedIds.size === 0 || isGenerating}
                 aria-label="Mark selected as Resolved"
               >
                 Mark as Resolved
@@ -968,11 +1160,46 @@ const handleBulkDelete = () => {
                 type="button"
                 variant="secondary"
                 onClick={handleBulkDelete}
-                disabled={!isHydrated || selectedIds.size === 0}
+                disabled={!isHydrated || selectedIds.size === 0 || isGenerating}
                 aria-label="Delete selected tickets"
               >
                 Delete selected
               </Button>
+              <Button
+                type="button"
+                onClick={() => handleBulkGenerate(Array.from(selectedIds))}
+                disabled={
+                  !isHydrated ||
+                  selectedIds.size === 0 ||
+                  isGenerating ||
+                  tickets.length === 0
+                }
+                aria-label="Generate AI output for selected tickets"
+              >
+                Generate AI output
+              </Button>
+              {isGenerating ? (
+                <span className="text-xs text-slate-600">
+                  Generating: {bulkAiState.processed}/{bulkAiState.total} · Success:{" "}
+                  {bulkAiState.success} · Failed: {bulkAiState.failed.length} ·
+                  Skipped: {bulkAiState.skipped}
+                </span>
+              ) : null}
+              {!isGenerating && bulkAiState.failed.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleRetryFailed}
+                  aria-label="Retry failed AI outputs"
+                >
+                  Retry failed
+                </Button>
+              ) : null}
+              {!isGenerating && bulkAiState.globalError ? (
+                <span className="text-xs text-amber-700">
+                  {bulkAiState.globalError}
+                </span>
+              ) : null}
             </div>
           ) : null}
           <div className="min-w-0 grid gap-4">

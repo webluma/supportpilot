@@ -355,13 +355,15 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
         }
       />
       <Card className="p-6">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-sm font-semibold text-slate-900">Description</p>
-          <p className="text-sm text-slate-600">{ticket.description}</p>
+          <p className="text-sm leading-relaxed text-slate-600">
+            {ticket.description}
+          </p>
         </div>
       </Card>
       <Card className="p-6">
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="space-y-2">
             <label
               className="text-sm font-semibold text-slate-900"
@@ -382,45 +384,49 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
               <option value="Resolved">Resolved</option>
             </select>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Category
-              </p>
-              <p className="text-sm text-slate-900">{ticket.category}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Category
+                </p>
+                <p className="text-sm text-slate-900">{ticket.category}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Channel
+                </p>
+                <p className="text-sm text-slate-900">{ticket.channel}</p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Channel
-              </p>
-              <p className="text-sm text-slate-900">{ticket.channel}</p>
-            </div>
-          </div>
           <div className="grid gap-3">
             {ticket.stepsToReproduce ? (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-sm font-semibold text-slate-900">
                   Steps to reproduce
                 </p>
-                <p className="whitespace-pre-line text-sm text-slate-600">
+                <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
                   {ticket.stepsToReproduce}
                 </p>
               </div>
             ) : null}
             {ticket.expectedResult ? (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-sm font-semibold text-slate-900">
                   Expected result
                 </p>
-                <p className="text-sm text-slate-600">{ticket.expectedResult}</p>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  {ticket.expectedResult}
+                </p>
               </div>
             ) : null}
             {ticket.actualResult ? (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-sm font-semibold text-slate-900">
                   Actual result
                 </p>
-                <p className="text-sm text-slate-600">{ticket.actualResult}</p>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  {ticket.actualResult}
+                </p>
               </div>
             ) : null}
           </div>
@@ -432,6 +438,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
             <Button
               type="button"
               variant="secondary"
+              className="h-9 px-4"
               onClick={() => handleCopyCustomerReply(displayedOutput)}
               disabled={aiState === "loading" || !displayedOutput}
             >
@@ -440,209 +447,206 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
             <Button
               type="button"
               variant="secondary"
+              className="h-9 px-4"
               onClick={handleRegenerateAi}
               disabled={aiState === "loading"}
             >
-              Regenerate AI output
+              {aiState === "loading" ? "Generating..." : "Regenerate AI output"}
             </Button>
             {replyCopyError ? (
               <span className="text-xs text-rose-600">{replyCopyError}</span>
             ) : null}
           </div>
           {displayedOutput?.generatedAt || displayedOutput?.model ? (
-            <div className="text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               {displayedOutput?.generatedAt
                 ? `Generated at: ${displayedOutput.generatedAt}`
                 : null}
               {displayedOutput?.generatedAt && displayedOutput?.model
-                ? " · "
-                : null}
-              {displayedOutput?.model
-                ? `Model: ${displayedOutput.model}`
-                : null}
+                ? "·"
+                : null}{" "}
+              {displayedOutput?.model ? `Model: ${displayedOutput.model}` : null}
             </div>
           ) : null}
           {shouldShowVersionSelector ? (
-            <Card className="p-6">
+            <Card className="p-5">
               <div className="space-y-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  AI Output History
-                </p>
-                <p className="text-xs text-slate-500">
-                  Selected:{" "}
-                  {selectedAi.kind === "latest"
-                    ? `LATEST (Version ${latestOutput?.version ?? "—"})`
-                    : `Version ${selectedAi.version}`}
-                </p>
-                <div className="grid gap-3">
-                  <div className="flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-                    <Button
-                      type="button"
-                      variant={
-                        selectedAi.kind === "latest" ? "primary" : "secondary"
-                      }
-                      onClick={() => setSelectedAi({ kind: "latest" })}
-                      disabled={aiState === "loading"}
-                    >
-                      LATEST
-                    </Button>
-                    <span className="text-xs text-slate-500">
-                      {latestOutput?.generatedAt
-                        ? `Generated at: ${latestOutput.generatedAt}`
-                        : "Generated at: —"}
-                      {latestOutput?.model
-                        ? ` · Model: ${latestOutput.model}`
-                        : ""}
-                    </span>
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-900">
+                      AI Output History
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Selected:{" "}
+                      {selectedAi.kind === "latest"
+                        ? `LATEST (Version ${latestOutput?.version ?? "—"})`
+                        : `Version ${selectedAi.version}`}
+                    </p>
                   </div>
-                  {allVersions.length > 0
-                    ? allVersions.map((version) => {
-                        const historyKeyBase = version.generatedAt ?? "history";
-                        const isSelected =
-                          selectedAi.kind === "version" &&
-                          selectedAi.version === version.version;
-                        return (
-                          <div
-                            key={`${historyKeyBase}-${version.version}`}
-                            className="flex flex-col gap-2 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                              <Button
-                                type="button"
-                                variant={isSelected ? "primary" : "secondary"}
-                                onClick={() =>
-                                  setSelectedAi({
-                                    kind: "version",
-                                    version: version.version,
-                                  })
-                                }
-                                disabled={aiState === "loading"}
-                              >
-                                Version {version.version}
-                              </Button>
-                              <span className="text-xs text-slate-500">
-                                {version.generatedAt
-                                  ? `Generated at: ${version.generatedAt}`
-                                  : "Generated at: —"}
-                                {version.model
-                                  ? ` · Model: ${version.model}`
-                                  : ""}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    : null}
+                  <span className="text-xs text-slate-500">
+                    {latestOutput?.generatedAt
+                      ? `Generated at: ${latestOutput.generatedAt}`
+                      : "Generated at: —"}
+                    {latestOutput?.model ? ` · Model: ${latestOutput.model}` : ""}
+                  </span>
+                </div>
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={
+                      selectedAi.kind === "latest" ? "primary" : "secondary"
+                    }
+                    onClick={() => setSelectedAi({ kind: "latest" })}
+                    disabled={aiState === "loading"}
+                  >
+                    LATEST
+                  </Button>
+                  {allVersions.map((version) => {
+                    const historyKeyBase = version.generatedAt ?? "history";
+                    const isSelected =
+                      selectedAi.kind === "version" &&
+                      selectedAi.version === version.version;
+                    return (
+                      <Button
+                        key={`${historyKeyBase}-${version.version}`}
+                        type="button"
+                        variant={isSelected ? "primary" : "secondary"}
+                        onClick={() =>
+                          setSelectedAi({
+                            kind: "version",
+                            version: version.version,
+                          })
+                        }
+                        disabled={aiState === "loading"}
+                      >
+                        Version {version.version}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             </Card>
           ) : null}
           <div className="grid gap-4">
             <Card className="p-6">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-900">
-                    Customer Reply
-                  </p>
-                  <div className="flex flex-col items-end gap-1">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-8 px-3"
-                      onClick={() =>
-                        handleCopy("customer", displayedOutput?.customerReply ?? "")
-                      }
-                      disabled={!displayedOutput}
-                    >
-                      {copiedKey === "customer" ? "Copied!" : "Copy"}
-                    </Button>
-                    {copyError &&
-                    lastCopyKeyRef.current === "customer" ? (
-                      <span className="text-xs text-rose-600">
-                        Copy failed. Please try again.
-                      </span>
-                    ) : null}
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold text-slate-900">
+                      Customer Reply
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Empathetic response ready to send
+                    </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      handleCopy("customer", displayedOutput?.customerReply ?? "")
+                    }
+                    disabled={!displayedOutput}
+                  >
+                    {copiedKey === "customer" ? "Copied!" : "Copy"}
+                  </Button>
                 </div>
-                <p className="whitespace-pre-line text-sm text-slate-600">
+                <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
                   {displayedOutput?.customerReply}
                 </p>
+                {copyError && lastCopyKeyRef.current === "customer" ? (
+                  <span className="text-xs text-rose-600">
+                    Copy failed. Please try again.
+                  </span>
+                ) : null}
               </div>
             </Card>
             <Card className="p-6">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-900">
-                    QA Summary
-                  </p>
-                  <div className="flex flex-col items-end gap-1">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-8 px-3"
-                      onClick={() =>
-                        handleCopy("qa", displayedOutput?.qaSummary ?? "")
-                      }
-                      disabled={!displayedOutput}
-                    >
-                      {copiedKey === "qa" ? "Copied!" : "Copy"}
-                    </Button>
-                    {copyError && lastCopyKeyRef.current === "qa" ? (
-                      <span className="text-xs text-rose-600">
-                        Copy failed. Please try again.
-                      </span>
-                    ) : null}
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold text-slate-900">
+                      QA Summary
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Technical handoff summary
+                    </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      handleCopy("qa", displayedOutput?.qaSummary ?? "")
+                    }
+                    disabled={!displayedOutput}
+                  >
+                    {copiedKey === "qa" ? "Copied!" : "Copy"}
+                  </Button>
                 </div>
-                <p className="whitespace-pre-line text-sm text-slate-600">
+                <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
                   {displayedOutput?.qaSummary}
                 </p>
+                {copyError && lastCopyKeyRef.current === "qa" ? (
+                  <span className="text-xs text-rose-600">
+                    Copy failed. Please try again.
+                  </span>
+                ) : null}
               </div>
             </Card>
             <Card className="p-6">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-900">
-                    Follow-up Questions
-                  </p>
-                  <div className="flex flex-col items-end gap-1">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-8 px-3"
-                      onClick={() =>
-                        handleCopy(
-                          "followups",
-                          (displayedOutput?.followUpQuestions ?? [])
-                            .map((question) => `- ${question}`)
-                            .join("\n"),
-                        )
-                      }
-                      disabled={!displayedOutput}
-                    >
-                      {copiedKey === "followups" ? "Copied!" : "Copy"}
-                    </Button>
-                    {copyError && lastCopyKeyRef.current === "followups" ? (
-                      <span className="text-xs text-rose-600">
-                        Copy failed. Please try again.
-                      </span>
-                    ) : null}
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold text-slate-900">
+                      Follow-up Questions
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Ask to clarify and unblock resolution
+                    </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      handleCopy(
+                        "followups",
+                        (displayedOutput?.followUpQuestions ?? [])
+                          .map((question) => `- ${question}`)
+                          .join("\n"),
+                      )
+                    }
+                    disabled={!displayedOutput}
+                  >
+                    {copiedKey === "followups" ? "Copied!" : "Copy"}
+                  </Button>
                 </div>
-                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
+                <ul className="space-y-2 text-sm leading-relaxed text-slate-700">
                   {(displayedOutput?.followUpQuestions ?? []).map(
                     (question, index) => {
                       const followUpKeyBase =
                         displayedOutput?.generatedAt ?? "ai";
                       return (
-                        <li key={`${followUpKeyBase}-${index}`}>{question}</li>
+                        <li
+                          key={`${followUpKeyBase}-${index}`}
+                          className="flex items-start gap-2"
+                        >
+                          <span className="mt-0.5 text-xs text-slate-500">•</span>
+                          <span>{question}</span>
+                        </li>
                       );
                     },
                   )}
                 </ul>
+                {copyError && lastCopyKeyRef.current === "followups" ? (
+                  <span className="text-xs text-rose-600">
+                    Copy failed. Please try again.
+                  </span>
+                ) : null}
               </div>
             </Card>
-        </div>
+          </div>
         </div>
       ) : aiState === "idle" ? (
         <Card className="p-6">

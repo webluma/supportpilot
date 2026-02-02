@@ -984,7 +984,7 @@ export default function TicketsPage() {
           ) : null}
         </div>
       ) : null}
-      <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-4 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="w-full min-w-0 sm:max-w-sm">
           <label className="sr-only" htmlFor="ticketSearch">
             Search tickets
@@ -1017,7 +1017,7 @@ export default function TicketsPage() {
           </select>
         </div>
       </div>
-      <div className="flex min-w-0 flex-col gap-3 px-1 sm:px-0 sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex min-w-0 flex-col gap-4 px-1 sm:px-0 sm:flex-row sm:items-center sm:gap-4">
         <div className="w-full sm:w-56">
           <label className="sr-only" htmlFor="ticketCategory">
             Filter by category
@@ -1114,7 +1114,7 @@ export default function TicketsPage() {
       ) : (
         <div className="space-y-4">
           {paginatedTickets.length > 0 ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-slate-600">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
               <label className="inline-flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -1125,82 +1125,101 @@ export default function TicketsPage() {
                 />
                 <span>Select all on page</span>
               </label>
-            </div>
-          ) : null}
-          {selectedIds.size > 0 ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="text-sm text-slate-700">
-                {selectedIds.size} selected
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setSelectedIds(new Set())}
-                aria-label="Clear selection"
-                disabled={isGenerating}
-              >
-                Clear selection
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleBulkStatusUpdate("In Progress")}
-                disabled={!isHydrated || selectedIds.size === 0 || isGenerating}
-                aria-label="Mark selected as In Progress"
-              >
-                Mark as In Progress
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => handleBulkStatusUpdate("Resolved")}
-                disabled={!isHydrated || selectedIds.size === 0 || isGenerating}
-                aria-label="Mark selected as Resolved"
-              >
-                Mark as Resolved
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleBulkDelete}
-                disabled={!isHydrated || selectedIds.size === 0 || isGenerating}
-                aria-label="Delete selected tickets"
-              >
-                Delete selected
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleBulkGenerate(Array.from(selectedIds))}
-                disabled={
-                  !isHydrated ||
-                  selectedIds.size === 0 ||
-                  isGenerating ||
-                  tickets.length === 0
-                }
-                aria-label="Generate AI output for selected tickets"
-              >
-                Generate AI output
-              </Button>
-              {isGenerating ? (
-                <span className="text-xs text-slate-600">
-                  Generating: {bulkAiState.processed}/{bulkAiState.total} · Success:{" "}
-                  {bulkAiState.success} · Failed: {bulkAiState.failed.length} ·
-                  Skipped: {bulkAiState.skipped}
-                </span>
-              ) : null}
-              {!isGenerating && bulkAiState.failed.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleRetryFailed}
-                  aria-label="Retry failed AI outputs"
-                >
-                  Retry failed
-                </Button>
-              ) : null}
-              {!isGenerating && bulkAiState.globalError ? (
-                <span className="text-xs text-amber-700">
-                  {bulkAiState.globalError}
-                </span>
+              {selectedIds.size > 0 ? (
+                <>
+                  <span className="text-sm text-slate-700">
+                    {selectedIds.size} selected
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      onClick={() => setSelectedIds(new Set())}
+                      aria-label="Clear selection"
+                      disabled={isGenerating}
+                    >
+                      Clear selection
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-8 px-3"
+                      onClick={() => handleBulkStatusUpdate("In Progress")}
+                      disabled={
+                        !isHydrated || selectedIds.size === 0 || isGenerating
+                      }
+                      aria-label="Mark selected as In Progress"
+                    >
+                      Mark as In Progress
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      onClick={() => handleBulkStatusUpdate("Resolved")}
+                      disabled={
+                        !isHydrated || selectedIds.size === 0 || isGenerating
+                      }
+                      aria-label="Mark selected as Resolved"
+                    >
+                      Mark as Resolved
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-8 px-3"
+                      onClick={handleBulkDelete}
+                      disabled={
+                        !isHydrated || selectedIds.size === 0 || isGenerating
+                      }
+                      aria-label="Delete selected tickets"
+                    >
+                      Delete selected
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-8 px-3"
+                      onClick={() =>
+                        handleBulkGenerate(Array.from(selectedIds))
+                      }
+                      disabled={
+                        !isHydrated ||
+                        selectedIds.size === 0 ||
+                        isGenerating ||
+                        tickets.length === 0
+                      }
+                      aria-label="Generate AI output for selected tickets"
+                    >
+                      Generate AI output
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    {isGenerating ? (
+                      <span>
+                        Generating: {bulkAiState.processed}/{bulkAiState.total} ·
+                        Success: {bulkAiState.success} · Failed:{" "}
+                        {bulkAiState.failed.length} · Skipped:{" "}
+                        {bulkAiState.skipped}
+                      </span>
+                    ) : null}
+                    {!isGenerating && bulkAiState.failed.length > 0 ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-7 px-3"
+                        onClick={handleRetryFailed}
+                        aria-label="Retry failed AI outputs"
+                      >
+                        Retry failed
+                      </Button>
+                    ) : null}
+                    {!isGenerating && bulkAiState.globalError ? (
+                      <span className="text-xs text-amber-700">
+                        {bulkAiState.globalError}
+                      </span>
+                    ) : null}
+                  </div>
+                </>
               ) : null}
             </div>
           ) : null}
@@ -1208,9 +1227,9 @@ export default function TicketsPage() {
             {paginatedTickets.map((ticket) => (
               <Card
                 key={ticket.id}
-                className="min-w-0 w-full max-w-full box-border overflow-hidden p-3 sm:p-6"
+                className="min-w-0 w-full max-w-full box-border overflow-hidden p-4 sm:p-6"
               >
-                <div className="flex min-w-0 flex-col items-start gap-2">
+                <div className="flex min-w-0 flex-col items-start gap-3">
                   <div className="flex min-w-0 w-full items-start gap-3">
                     <input
                       type="checkbox"
@@ -1219,16 +1238,16 @@ export default function TicketsPage() {
                       onChange={() => handleToggleTicket(ticket.id)}
                       aria-label={`Select ticket ${ticket.title}`}
                     />
-                    <div className="min-w-0 w-full space-y-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">
+                    <div className="min-w-0 w-full space-y-1.5">
+                      <p className="truncate text-base font-semibold leading-snug text-slate-900">
                         {ticket.title}
                       </p>
-                      <p className="line-clamp-2 break-words text-sm text-slate-600 sm:truncate">
+                      <p className="line-clamp-2 break-words text-sm leading-relaxed text-slate-600 sm:truncate">
                         {ticket.description}
                       </p>
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-wrap gap-2">
+                  <div className="flex min-w-0 flex-wrap gap-2.5">
                     <button
                       type="button"
                       className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
@@ -1267,7 +1286,7 @@ export default function TicketsPage() {
                       </Badge>
                     </button>
                   </div>
-                  <div className="w-full pt-2">
+                  <div className="w-full pt-1">
                     <ButtonLink
                       href={`/app/tickets/${ticket.id}`}
                       className="inline-block"
@@ -1279,51 +1298,53 @@ export default function TicketsPage() {
               </Card>
             ))}
           </div>
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
             <span>
               Showing {totalTickets === 0 ? 0 : startIndex + 1}–{endIndex} of{" "}
               {totalTickets}
             </span>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage <= 1}
-              >
-                Previous
-              </Button>
+            {totalPages > 1 ? (
               <div className="flex flex-wrap items-center gap-2">
-                {pageItems.map((item, index) =>
-                  typeof item === "number" ? (
-                    <Button
-                      key={`${item}-${index}`}
-                      type="button"
-                      variant={item === currentPage ? "primary" : "secondary"}
-                      aria-current={item === currentPage ? "page" : undefined}
-                      onClick={() => handlePageChange(item)}
-                    >
-                      {item}
-                    </Button>
-                  ) : (
-                    <span key={`ellipsis-${index}`} className="px-2">
-                      {item}
-                    </span>
-                  )
-                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {pageItems.map((item, index) =>
+                    typeof item === "number" ? (
+                      <Button
+                        key={`${item}-${index}`}
+                        type="button"
+                        variant={item === currentPage ? "primary" : "secondary"}
+                        aria-current={item === currentPage ? "page" : undefined}
+                        onClick={() => handlePageChange(item)}
+                      >
+                        {item}
+                      </Button>
+                    ) : (
+                      <span key={`ellipsis-${index}`} className="px-2">
+                        {item}
+                      </span>
+                    )
+                  )}
+                </div>
+                <span>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
               </div>
-              <span>
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage >= totalPages}
-              >
-                Next
-              </Button>
-            </div>
+            ) : null}
           </div>
         </div>
       )}

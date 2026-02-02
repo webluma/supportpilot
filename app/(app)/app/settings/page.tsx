@@ -6,13 +6,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Settings"
         description="Configure workspace preferences and support workflow defaults."
         badge={<Badge variant="default">Workspace</Badge>}
       />
-      <Card className="p-6">
+      <Card className="p-8">
         <EmptyState
           title="No settings configured"
           description="Settings will appear here as the SupportPilot workflow expands."

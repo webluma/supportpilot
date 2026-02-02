@@ -114,13 +114,13 @@ export default function NewTicketPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="New Ticket"
         description="Capture the issue context so AI can generate an empathetic response and a structured QA report."
         badge={<Badge variant="warning">Draft</Badge>}
       />
-      <Card className="p-6">
+      <Card className="p-8">
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="grid gap-4">
             <div className="space-y-2">

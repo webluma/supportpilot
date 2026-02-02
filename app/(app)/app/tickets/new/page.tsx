@@ -121,8 +121,8 @@ export default function NewTicketPage() {
         badge={<Badge variant="warning">Draft</Badge>}
       />
       <Card className="p-8">
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div className="grid gap-4">
+        <form className="space-y-8" onSubmit={handleSubmit}>
+          <div className="grid gap-5">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900" htmlFor="title">
                 Title
@@ -141,7 +141,7 @@ export default function NewTicketPage() {
               ) : null}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-3">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-900" htmlFor="category">
                   Category
@@ -255,7 +255,7 @@ export default function NewTicketPage() {
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
                 <label
                   className="text-sm font-medium text-slate-900"

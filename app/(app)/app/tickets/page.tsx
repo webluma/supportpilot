@@ -791,199 +791,158 @@ export default function TicketsPage() {
   };
 
   return (
-    <div className="min-w-0 w-full max-w-full overflow-x-hidden space-y-6">
+    <div className="min-w-0 w-full max-w-full overflow-x-hidden space-y-8">
       <PageHeader
-        title="Tickets"
-        description="Review, filter, and prioritize incoming support requests."
-        badge={<Badge>All</Badge>}
+        title="Tickets workspace"
+        description="Triage, prioritize, and close the loop with AI-assisted responses."
+        badge={<Badge variant="info">Live board</Badge>}
         actions={
-          <ButtonLink href="/app/tickets/new" variant="secondary">
+          <ButtonLink href="/app/tickets/new" className="shadow-md">
             Create a new ticket
           </ButtonLink>
         }
       />
-      <div className="flex min-w-0 flex-wrap gap-2">
-        {(
-          ["All", "Active", "Open", "In Progress", "Resolved"] as StatusFilter[]
-        ).map((status) => (
-          <Button
-            key={status}
-            type="button"
-            variant={activeFilter === status ? "primary" : "secondary"}
-            onClick={() => handleFilterChange(status)}
-          >
-            {status} ({counts[status]})
-          </Button>
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-wrap gap-2">
-        {(
-          [
-            { label: "All", value: ANSWERED_ALL },
-            { label: "Answered", value: ANSWERED_ANSWERED },
-            { label: "Pending", value: ANSWERED_PENDING },
-          ] as Array<{ label: string; value: AnsweredFilter }>
-        ).map((option) => (
-          <Button
-            key={option.value}
-            type="button"
-            variant={answeredFilter === option.value ? "primary" : "secondary"}
-            onClick={() => handleAnsweredChange(option.value)}
-          >
-            {option.label} ({answeredCounts[option.value]})
-          </Button>
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-slate-700">
-        <span>{resultsCount} results</span>
-        {hasActiveFilters ? (
-          <span className="text-slate-600">
-            Active filters: {activeFiltersCount}
-          </span>
-        ) : null}
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={handleClearFilters}
-          disabled={!hasActiveFilters}
-        >
-          Clear filters
-        </Button>
-      </div>
-      {hasActiveFilters ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-500">Quick reset</span>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 px-2 text-xs"
-            onClick={handleResetStatus}
-            disabled={activeFilter === "All"}
-          >
-            Reset status
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 px-2 text-xs"
-            onClick={handleResetAnswered}
-            disabled={answeredFilter === "all"}
-          >
-            Reset AI
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 px-2 text-xs"
-            onClick={handleResetCategory}
-            disabled={categoryFilter === "All categories"}
-          >
-            Reset category
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 px-2 text-xs"
-            onClick={handleResetPriority}
-            disabled={priorityFilter === "All priorities"}
-          >
-            Reset priority
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 px-2 text-xs"
-            onClick={handleResetSort}
-            disabled={sortOption === "newest"}
-          >
-            Reset sort
-          </Button>
-        </div>
-      ) : null}
-      {hasActiveFilters ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {activeFilter !== "All" ? (
-            <Badge className="gap-2 pr-1">
-              Status: {activeFilter}
-              <button
+      <Card className="panel-surface p-5 shadow-sm">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              ["All", "Active", "Open", "In Progress", "Resolved"] as StatusFilter[]
+            ).map((status) => (
+              <Button
+                key={status}
                 type="button"
-                aria-label="Remove status filter"
-                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
-                onClick={handleRemoveStatusFilter}
+                variant={activeFilter === status ? "primary" : "secondary"}
+                className="h-9"
+                onClick={() => handleFilterChange(status)}
               >
-                ×
-              </button>
-            </Badge>
-          ) : null}
-          {categoryFilter !== "All categories" ? (
-            <Badge className="gap-2 pr-1">
-              Category: {categoryFilter}
-              <button
+                {status} ({counts[status]})
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              [
+                { label: "All", value: ANSWERED_ALL },
+                { label: "Answered", value: ANSWERED_ANSWERED },
+                { label: "Pending", value: ANSWERED_PENDING },
+              ] as Array<{ label: string; value: AnsweredFilter }>
+            ).map((option) => (
+              <Button
+                key={option.value}
                 type="button"
-                aria-label="Remove category filter"
-                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
-                onClick={handleRemoveCategoryFilter}
+                variant={answeredFilter === option.value ? "primary" : "secondary"}
+                className="h-9"
+                onClick={() => handleAnsweredChange(option.value)}
               >
-                ×
-              </button>
-            </Badge>
-          ) : null}
-          {priorityFilter !== "All priorities" ? (
-            <Badge className="gap-2 pr-1">
-              Priority: {priorityFilter}
-              <button
-                type="button"
-                aria-label="Remove priority filter"
-                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
-                onClick={handleRemovePriorityFilter}
-              >
-                ×
-              </button>
-            </Badge>
-          ) : null}
-          {answeredFilter !== "all" ? (
-            <Badge className="gap-2 pr-1">
-              AI: {answeredFilter === "answered" ? "Answered" : "Pending"}
-              <button
-                type="button"
-                aria-label="Remove AI filter"
-                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
-                onClick={handleRemoveAnsweredFilter}
-              >
-                ×
-              </button>
-            </Badge>
-          ) : null}
-          {hasSearch ? (
-            <Badge className="gap-2 pr-1">
-              <span className="max-w-[200px] truncate">
-                Search: {searchValue.trim()}
+                {option.label} ({answeredCounts[option.value]})
+              </Button>
+            ))}
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-slate-700">
+            <span className="font-medium text-slate-900">{resultsCount} results</span>
+            {hasActiveFilters ? (
+              <span className="text-slate-600">
+                Active filters: {activeFiltersCount}
               </span>
-              <button
-                type="button"
-                aria-label="Remove search filter"
-                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
-                onClick={handleRemoveSearchFilter}
-              >
-                ×
-              </button>
-            </Badge>
-          ) : null}
-          {sortOption !== "newest" ? (
-            <Badge className="gap-2 pr-1">
-              Sort: {sortOptionLabels[sortOption]}
-              <button
-                type="button"
-                aria-label="Remove sort filter"
-                className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
-                onClick={handleRemoveSortFilter}
-              >
-                ×
-              </button>
-            </Badge>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleClearFilters}
+              disabled={!hasActiveFilters}
+            >
+              Clear filters
+            </Button>
+          </div>
+          {hasActiveFilters ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {activeFilter !== "All" ? (
+                <Badge className="gap-2 pr-1">
+                  <span className="truncate">Status: {activeFilter}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove status filter"
+                    className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                    onClick={handleRemoveStatusFilter}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ) : null}
+              {categoryFilter !== "All categories" ? (
+                <Badge className="gap-2 pr-1">
+                  <span className="truncate">Category: {categoryFilter}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove category filter"
+                    className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                    onClick={handleRemoveCategoryFilter}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ) : null}
+              {priorityFilter !== "All priorities" ? (
+                <Badge className="gap-2 pr-1">
+                  <span className="truncate">Priority: {priorityFilter}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove priority filter"
+                    className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                    onClick={handleRemovePriorityFilter}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ) : null}
+              {answeredFilter !== "all" ? (
+                <Badge className="gap-2 pr-1">
+                  <span className="truncate">
+                    AI: {answeredFilter === "answered" ? "Answered" : "Pending"}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Remove AI filter"
+                    className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                    onClick={handleRemoveAnsweredFilter}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ) : null}
+              {hasSearch ? (
+                <Badge className="gap-2 pr-1">
+                  <span className="max-w-[200px] truncate">
+                    Search: {searchValue.trim()}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Remove search filter"
+                    className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                    onClick={handleRemoveSearchFilter}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ) : null}
+              {sortOption !== "newest" ? (
+                <Badge className="gap-2 pr-1">
+                  <span className="truncate">Sort: {sortOptionLabels[sortOption]}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove sort filter"
+                    className="rounded-full px-1 text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 ring-offset-white"
+                    onClick={handleRemoveSortFilter}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              ) : null}
+            </div>
           ) : null}
         </div>
-      ) : null}
+      </Card>
+
       <div className="flex min-w-0 flex-col gap-4 px-1 sm:px-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="w-full min-w-0 sm:max-w-sm">
           <label className="sr-only" htmlFor="ticketSearch">
@@ -1066,14 +1025,14 @@ export default function TicketsPage() {
         </div>
       </div>
       {!isHydrated ? (
-        <Card className="p-6">
+        <Card className="card-surface p-6">
           <EmptyState
             title="Loading tickets"
             description="Fetching the latest ticket activity for this workspace."
           />
         </Card>
       ) : sortedTickets.length === 0 ? (
-        <Card className="p-6">
+        <Card className="card-surface p-6">
           <EmptyState
             title="No tickets found"
             description={
@@ -1114,7 +1073,7 @@ export default function TicketsPage() {
       ) : (
         <div className="space-y-4">
           {paginatedTickets.length > 0 ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-3 text-sm text-slate-700 shadow-sm">
               <label className="inline-flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -1227,10 +1186,10 @@ export default function TicketsPage() {
             {paginatedTickets.map((ticket) => (
               <Card
                 key={ticket.id}
-                className="min-w-0 w-full max-w-full box-border overflow-hidden p-4 sm:p-6"
+                className="min-w-0 w-full max-w-full box-border overflow-hidden border border-[var(--border-subtle)] bg-[var(--surface-base)] p-4 sm:p-5 shadow-sm transition hover:shadow-lg flex h-full"
               >
-                <div className="flex min-w-0 flex-col items-start gap-3">
-                  <div className="flex min-w-0 w-full items-start gap-3">
+                <div className="flex min-w-0 h-full flex-col gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <input
                       type="checkbox"
                       className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
@@ -1238,16 +1197,26 @@ export default function TicketsPage() {
                       onChange={() => handleToggleTicket(ticket.id)}
                       aria-label={`Select ticket ${ticket.title}`}
                     />
-                    <div className="min-w-0 w-full space-y-1.5">
-                      <p className="truncate text-base font-semibold leading-snug text-slate-900">
-                        {ticket.title}
-                      </p>
-                      <p className="line-clamp-2 break-words text-sm leading-relaxed text-slate-600 sm:truncate">
-                        {ticket.description}
-                      </p>
+                    <div className="flex min-w-0 w-full flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-1.5">
+                        <p className="truncate text-base font-semibold leading-snug text-slate-900">
+                          {ticket.title}
+                        </p>
+                        <p className="line-clamp-2 break-words text-sm leading-relaxed text-slate-600 sm:truncate">
+                          {ticket.description}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span className="rounded-full bg-[var(--surface-muted)] px-2 py-1">
+                          Created {new Date(ticket.createdAt).toLocaleDateString()}
+                        </span>
+                        <span className="rounded-full bg-[var(--surface-muted)] px-2 py-1">
+                          Updated {new Date(ticket.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-wrap gap-2.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                     <button
                       type="button"
                       className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
@@ -1286,10 +1255,11 @@ export default function TicketsPage() {
                       </Badge>
                     </button>
                   </div>
-                  <div className="w-full pt-1">
+                  <div className="mt-auto pt-2">
                     <ButtonLink
                       href={`/app/tickets/${ticket.id}`}
-                      className="inline-block"
+                      variant="secondary"
+                      className="inline-flex h-9 items-center px-3"
                     >
                       View ticket
                     </ButtonLink>
@@ -1298,7 +1268,7 @@ export default function TicketsPage() {
               </Card>
             ))}
           </div>
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-3 text-sm text-slate-600 shadow-sm">
             <span>
               Showing {totalTickets === 0 ? 0 : startIndex + 1}–{endIndex} of{" "}
               {totalTickets}

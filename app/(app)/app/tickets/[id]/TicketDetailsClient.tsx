@@ -339,7 +339,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title={ticket.title}
         description="Review the AI response, QA summary, and follow-up questions for this ticket."
@@ -398,7 +398,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                 <p className="text-sm text-slate-900">{ticket.channel}</p>
               </div>
             </div>
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             {ticket.stepsToReproduce ? (
               <div className="space-y-1.5">
                 <p className="text-sm font-semibold text-slate-900">
@@ -433,7 +433,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
         </div>
       </Card>
       {ticket.aiOutput ? (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"

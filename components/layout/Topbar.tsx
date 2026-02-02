@@ -1,12 +1,29 @@
 type TopbarProps = {
   isMenuOpen: boolean;
   onMenuClick: () => void;
+  currentPath?: string | null;
 };
 
-export function Topbar({ isMenuOpen, onMenuClick }: TopbarProps) {
+const titleMap: Record<string, string> = {
+  "/app": "Dashboard",
+  "/app/tickets": "Tickets",
+  "/app/tickets/new": "New Ticket",
+  "/app/settings": "Settings",
+};
+
+function resolveTitle(path?: string | null) {
+  if (!path) return "Workspace";
+  const match = Object.entries(titleMap).find(([key]) =>
+    path === key || (key === "/app/tickets" && path.startsWith("/app/tickets"))
+  );
+  return match ? match[1] : "Workspace";
+}
+
+export function Topbar({ isMenuOpen, onMenuClick, currentPath }: TopbarProps) {
+  const currentTitle = resolveTitle(currentPath);
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center border-b border-slate-200 bg-white/80 px-6 backdrop-blur">
-      <div className="flex w-full items-center justify-between gap-4">
+    <header className="sticky top-0 z-20 flex h-16 items-center border-b border-slate-200 bg-white/80 px-4 sm:px-6 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -17,14 +34,19 @@ export function Topbar({ isMenuOpen, onMenuClick }: TopbarProps) {
           >
             Menu
           </button>
-          <div>
+          <div className="leading-tight">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Workspace
+              SupportPilot
             </p>
-            <p className="text-base font-semibold text-slate-900">SupportPilot</p>
+            <p className="text-base font-semibold text-slate-900">
+              {currentTitle}
+            </p>
           </div>
         </div>
-        <div className="text-sm text-slate-500">AI Support Assistant demo</div>
+        <div className="flex items-center gap-3 text-sm text-slate-500">
+          <span className="hidden sm:inline">AI Support Assistant demo</span>
+          <span className="h-8 w-8 rounded-full bg-slate-200" aria-hidden />
+        </div>
       </div>
     </header>
   );

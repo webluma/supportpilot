@@ -422,17 +422,28 @@ export default function TicketsPage() {
     }
   }, [pageFromQuery, parsedPage, totalPages, currentPage]);
 
-  useEffect(() => {
-    setSelectedIds((prev) => (prev.size ? new Set() : prev));
-  }, [
-    currentPage,
-    activeFilter,
-    categoryFilter,
-    priorityFilter,
-    answeredFilter,
-    searchValue,
-    sortOption,
-  ]);
+useEffect(() => {
+  setSelectedIds((prev) => (prev.size ? new Set() : prev));
+}, [
+  currentPage,
+  activeFilter,
+  categoryFilter,
+  priorityFilter,
+  answeredFilter,
+  searchValue,
+  sortOption,
+]);
+
+useEffect(() => {
+  if (selectedIds.size === 0) return;
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      setSelectedIds(new Set());
+    }
+  };
+  window.addEventListener("keydown", onKeyDown);
+  return () => window.removeEventListener("keydown", onKeyDown);
+}, [selectedIds]);
 
   const handleFilterChange = (status: StatusFilter) => {
     updateQuery({ status, page: 1 });
@@ -541,18 +552,24 @@ export default function TicketsPage() {
     });
   };
 
-  const handleBulkStatusUpdate = (status: TicketStatus) => {
-    selectedIds.forEach((id) => updateTicketStatus(id, status));
-    setSelectedIds(new Set());
-  };
+const handleBulkStatusUpdate = (status: TicketStatus) => {
+  selectedIds.forEach((id) => updateTicketStatus(id, status));
+  setSelectedIds(new Set());
+};
 
-  const handleBulkDelete = () => {
-    if (!window.confirm("Delete selected tickets?")) {
-      return;
-    }
-    selectedIds.forEach((id) => deleteTicket(id));
-    setSelectedIds(new Set());
-  };
+const handleBulkDelete = () => {
+  if (!window.confirm("Delete selected tickets?")) {
+    return;
+  }
+  const toRemove = selectedIds.size;
+  selectedIds.forEach((id) => deleteTicket(id));
+  setSelectedIds(new Set());
+  const remaining = Math.max(0, totalTickets - toRemove);
+  const newTotalPages = Math.max(1, Math.ceil(remaining / PAGE_SIZE));
+  if (currentPage > newTotalPages) {
+    updateQuery({ page: newTotalPages });
+  }
+};
 
   const hasSearch = searchValue.trim().length > 0;
   const hasNonSearchFilters = activeFiltersCount > (hasSearch ? 1 : 0);
@@ -911,33 +928,48 @@ export default function TicketsPage() {
                   className="h-4 w-4 rounded border-slate-300 text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
                   checked={allOnPageSelected}
                   onChange={handleToggleSelectAll}
+                  aria-label="Select all tickets on this page"
                 />
                 <span>Select all on page</span>
               </label>
-              {selectedIds.size > 0 ? (
-                <span>{selectedIds.size} selected</span>
-              ) : null}
             </div>
           ) : null}
           {selectedIds.size > 0 ? (
-            <div className="flex min-w-0 flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-sm text-slate-700">
+                {selectedIds.size} selected
+              </span>
               <Button
                 type="button"
+                variant="secondary"
+                onClick={() => setSelectedIds(new Set())}
+                aria-label="Clear selection"
+              >
+                Clear selection
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleBulkStatusUpdate("In Progress")}
+                disabled={!isHydrated || selectedIds.size === 0}
+                aria-label="Mark selected as In Progress"
+              >
+                Mark as In Progress
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
                 onClick={() => handleBulkStatusUpdate("Resolved")}
+                disabled={!isHydrated || selectedIds.size === 0}
+                aria-label="Mark selected as Resolved"
               >
                 Mark as Resolved
               </Button>
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => handleBulkStatusUpdate("Open")}
-              >
-                Mark as Open
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
                 onClick={handleBulkDelete}
+                disabled={!isHydrated || selectedIds.size === 0}
+                aria-label="Delete selected tickets"
               >
                 Delete selected
               </Button>

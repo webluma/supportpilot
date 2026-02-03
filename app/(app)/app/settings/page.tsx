@@ -6,23 +6,46 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { useTicketsStore } from "@/store/useTicketsStore";
 
 type Settings = {
   workspaceName: string;
-  timezone: string;
+  timezone: Timezone;
   aiEnabled: boolean;
-  aiTone: string;
+  aiTone: Tone;
   aiRedact: boolean;
   notifications: {
     newTicket: boolean;
     slaRisk: boolean;
     dailyDigest: boolean;
-    digestFrequency: string; // "Daily" | "Weekly" | "Off"
+    digestFrequency: DigestFrequency;
   };
   security: {
     confirmBulkDelete: boolean;
-    sessionTimeout: string;
+    sessionTimeout: SessionTimeout;
   };
+  integrations: {
+    slack: IntegrationState;
+    zendesk: IntegrationState;
+    intercom: IntegrationState;
+    webhooks: IntegrationState;
+  };
+  auditLog: AuditEvent[];
+};
+
+type IntegrationState = {
+  connected: boolean;
+  connectedAt?: string;
+  lastSyncedAt?: string;
+  endpoint?: string;
+};
+
+type AuditEvent = {
+  id: string;
+  eventType: string;
+  actor: string;
+  detail: string;
+  createdAt: string;
 };
 
 const STORAGE_KEY = "supportpilot:settings:v1";
@@ -48,6 +71,48 @@ const defaultSettings: Settings = {
     confirmBulkDelete: true,
     sessionTimeout: "30m",
   },
+  integrations: {
+    slack: { connected: false },
+    zendesk: { connected: false },
+    intercom: { connected: false },
+    webhooks: { connected: false, endpoint: "" },
+  },
+  auditLog: [],
+};
+
+const safeId = () => {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const isValidAuditEvent = (event: any): event is AuditEvent => {
+  return (
+    event &&
+    typeof event === "object" &&
+    typeof event.id === "string" &&
+    typeof event.eventType === "string" &&
+    typeof event.actor === "string" &&
+    typeof event.detail === "string" &&
+    typeof event.createdAt === "string"
+  );
+};
+
+const normalizeIntegration = (value: any): IntegrationState => {
+  if (!value || typeof value !== "object") return { connected: false };
+  return {
+    connected: !!value.connected,
+    connectedAt:
+      typeof value.connectedAt === "string" ? value.connectedAt : undefined,
+    lastSyncedAt:
+      typeof value.lastSyncedAt === "string" ? value.lastSyncedAt : undefined,
+    endpoint: typeof value.endpoint === "string" ? value.endpoint : undefined,
+  };
 };
 
 function isValidSettings(raw: unknown): raw is Settings {
@@ -102,6 +167,15 @@ function sanitizeSettings(raw: unknown): Settings {
         ? raw.security.sessionTimeout
         : defaultSettings.security.sessionTimeout,
     },
+    integrations: {
+      slack: normalizeIntegration(raw.integrations?.slack),
+      zendesk: normalizeIntegration(raw.integrations?.zendesk),
+      intercom: normalizeIntegration(raw.integrations?.intercom),
+      webhooks: normalizeIntegration(raw.integrations?.webhooks),
+    },
+    auditLog: Array.isArray(raw.auditLog)
+      ? raw.auditLog.filter(isValidAuditEvent).slice(0, 50)
+      : [],
   };
 
   // S1.1: normaliza coerência do digest ao hidratar
@@ -129,6 +203,43 @@ function normalizeNotifications(settings: Settings): Settings {
   return settings;
 }
 
+function appendAudit(list: AuditEvent[], event: AuditEvent): AuditEvent[] {
+  return [event, ...list].slice(0, 50);
+}
+
+function formatTimestamp(iso: string) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function toCsv(headers: string[], rows: string[][]) {
+  const escape = (val: string) => `"${val.replace(/"/g, '""')}"`;
+  return [
+    headers.map(escape).join(","),
+    ...rows.map((r) => r.map(escape).join(",")),
+  ].join("\n");
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function SettingsPage() {
   const [baseline, setBaseline] = useState<Settings>(defaultSettings);
   const [draft, setDraft] = useState<Settings>(defaultSettings);
@@ -138,6 +249,11 @@ export default function SettingsPage() {
     text: string;
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { tickets, hydrateTickets, isHydrated } = useTicketsStore();
+
+  useEffect(() => {
+    if (!isHydrated) hydrateTickets();
+  }, [isHydrated, hydrateTickets]);
 
   // Hydrate from localStorage (com guard + sanitize)
   useEffect(() => {
@@ -191,6 +307,24 @@ export default function SettingsPage() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   };
 
+  const addAudit = (eventType: string, detail: string) => ({
+    id: safeId(),
+    eventType,
+    actor: "You",
+    detail,
+    createdAt: new Date().toISOString(),
+  });
+
+  const persistWithAudit = (settings: Settings, evt?: AuditEvent) => {
+    const next: Settings = {
+      ...settings,
+      auditLog: evt ? appendAudit(settings.auditLog ?? [], evt) : settings.auditLog ?? [],
+    };
+    persistSettings(next);
+    setBaseline(next);
+    setDraft(next);
+  };
+
   const handleSave = () => {
     setMessage(null);
     if (!validate()) return;
@@ -199,9 +333,8 @@ export default function SettingsPage() {
     setTimeout(() => {
       try {
         const normalized = normalizeNotifications(draft);
-        persistSettings(normalized);
-        setBaseline(normalized);
-        setDraft(normalized);
+        const evt = addAudit("settings.updated", "Settings saved");
+        persistWithAudit(normalized, evt);
         setMessage({ type: "success", text: "Settings saved" });
       } catch {
         setMessage({ type: "error", text: "Could not save settings" });
@@ -288,9 +421,8 @@ export default function SettingsPage() {
     );
     if (!confirmed) return;
 
-    setBaseline(defaultSettings);
-    setDraft(defaultSettings);
-    persistSettings(defaultSettings);
+    const evt = addAudit("settings.reset", "Settings reset to defaults");
+    persistWithAudit(defaultSettings, evt);
     setMessage({ type: "success", text: "Settings reset to defaults" });
   };
 
@@ -305,14 +437,104 @@ export default function SettingsPage() {
       aiEnabled: false,
       aiRedact: false,
     };
-    setDraft(updated);
-    setBaseline(updated);
-    persistSettings(updated);
+    const evt = addAudit("ai.disabled", "AI features disabled");
+    persistWithAudit(updated, evt);
     setMessage({ type: "success", text: "AI features disabled" });
   };
 
+  const connectIntegration = (key: keyof Settings["integrations"]) => {
+    const confirmed = window.confirm("Simulated OAuth connect. Continue?");
+    if (!confirmed) return;
+    const now = new Date().toISOString();
+    const next: Settings = {
+      ...draft,
+      integrations: {
+        ...draft.integrations,
+        [key]: {
+          ...draft.integrations[key],
+          connected: true,
+          connectedAt: now,
+          lastSyncedAt: now,
+        },
+      },
+    };
+    const evt = addAudit("integration.connected", `${String(key)} connected`);
+    persistWithAudit(next, evt);
+    setMessage({ type: "success", text: `${String(key)} connected` });
+  };
+
+  const disconnectIntegration = (key: keyof Settings["integrations"]) => {
+    const confirmed = window.confirm(
+      `Disconnect ${String(key)}? This will stop syncing.`
+    );
+    if (!confirmed) return;
+    const next: Settings = {
+      ...draft,
+      integrations: {
+        ...draft.integrations,
+        [key]: { connected: false },
+      },
+    };
+    const evt = addAudit(
+      "integration.disconnected",
+      `${String(key)} disconnected`
+    );
+    persistWithAudit(next, evt);
+    setMessage({ type: "success", text: `${String(key)} disconnected` });
+  };
+
+  const formatLastSynced = (integration: IntegrationState) => {
+    if (!integration.connected) return "Not connected";
+    return integration.lastSyncedAt
+      ? `Last synced: ${formatTimestamp(integration.lastSyncedAt)}`
+      : "Connected";
+  };
+
+  const exportTicketsCsv = () => {
+    const rows = tickets.map((t) => [
+      t.id,
+      t.title,
+      t.status,
+      t.priority,
+      t.category,
+      t.channel,
+      t.createdAt,
+      t.updatedAt,
+    ]);
+    const csv = toCsv(
+      [
+        "id",
+        "title",
+        "status",
+        "priority",
+        "category",
+        "channel",
+        "createdAt",
+        "updatedAt",
+      ],
+      rows
+    );
+    downloadCsv("tickets.csv", csv);
+  };
+
+  const exportAuditCsv = () => {
+    const rows = (draft.auditLog ?? []).map((e) => [
+      e.id,
+      e.eventType,
+      e.actor,
+      e.detail,
+      e.createdAt,
+    ]);
+    const csv = toCsv(
+      ["id", "eventType", "actor", "detail", "createdAt"],
+      rows
+    );
+    downloadCsv("audit-log.csv", csv);
+  };
+
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="min-w-0 w-full max-w-full overflow-x-hidden">
+      <div className="mx-auto w-full max-w-[720px] px-4 sm:px-6 lg:px-12 xl:px-16 2xl:px-20 lg:max-w-[1040px] xl:max-w-[1120px] space-y-6 sm:space-y-8 lg:space-y-12">
       <PageHeader
         title="Settings"
         description="Configure workspace preferences, AI controls, notifications, and safety rules."
@@ -331,9 +553,9 @@ export default function SettingsPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 sm:gap-6">
+      <div className="grid min-w-0 gap-4 sm:gap-6 lg:gap-8">
         {/* Workspace */}
-        <Card className="p-5 sm:p-6 space-y-4">
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
           <div className="space-y-1">
             <h2 className="text-base font-semibold text-slate-900">
               Workspace
@@ -405,7 +627,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* AI */}
-        <Card className="p-5 sm:p-6 space-y-4">
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
           <div className="space-y-1">
             <h2 className="text-base font-semibold text-slate-900">AI</h2>
             <p className="text-sm text-slate-600">
@@ -477,7 +699,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Notifications */}
-        <Card className="p-5 sm:p-6 space-y-4">
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
           <div className="space-y-1">
             <h2 className="text-base font-semibold text-slate-900">
               Notifications
@@ -536,9 +758,9 @@ export default function SettingsPage() {
                 id="digestFrequency"
                 name="digestFrequency"
                 value={draft.notifications.digestFrequency}
-                onChange={(e) => setDigestFrequency(e.target.value)}
+                onChange={(e) => setDigestFrequency(e.target.value as DigestFrequency)}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
-                disabled={loading}
+                disabled={loading || !draft.notifications.dailyDigest}
               >
                 {digestFrequencies.map((freq) => (
                   <option key={freq} value={freq}>
@@ -560,7 +782,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Security */}
-        <Card className="p-5 sm:p-6 space-y-4">
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
           <div className="space-y-1">
             <h2 className="text-base font-semibold text-slate-900">Security</h2>
             <p className="text-sm text-slate-600">
@@ -622,8 +844,163 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* Integrations */}
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              Integrations
+            </h2>
+            <p className="text-sm text-slate-600">
+              Connect SupportPilot to your stack.
+            </p>
+          </div>
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            {(
+              [
+                { key: "slack", title: "Slack", desc: "Send alerts to a channel." },
+                { key: "zendesk", title: "Zendesk", desc: "Sync status with Zendesk tickets." },
+                { key: "intercom", title: "Intercom", desc: "Push AI replies to Intercom." },
+                { key: "webhooks", title: "Webhooks", desc: "Send events to your endpoint." },
+              ] as const
+            ).map((item) => {
+              const integration = draft.integrations[item.key];
+              const connected = integration.connected;
+              return (
+                <div
+                  key={item.key}
+                  className="space-y-3 rounded-lg border border-slate-200 p-4 shadow-sm min-w-0 w-full overflow-hidden"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-slate-600 break-words">{item.desc}</p>
+                    </div>
+                    <Badge variant={connected ? "default" : "secondary"}>
+                      {connected ? "Connected" : "Not connected"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 break-words">
+                    {formatLastSynced(integration)}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {item.key === "webhooks" && !connected ? (
+                      <input
+                        className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                        placeholder="https://example.com/webhook"
+                        value={draft.integrations.webhooks.endpoint ?? ""}
+                        onChange={(e) =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            integrations: {
+                              ...prev.integrations,
+                              webhooks: {
+                                ...prev.integrations.webhooks,
+                                endpoint: e.target.value,
+                              },
+                            },
+                          }))
+                        }
+                        disabled={loading}
+                      />
+                    ) : null}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      {connected ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            disconnectIntegration(item.key as keyof Settings["integrations"])
+                          }
+                          disabled={loading}
+                          className="w-full sm:w-auto"
+                        >
+                          Disconnect
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          onClick={() =>
+                            connectIntegration(item.key as keyof Settings["integrations"])
+                          }
+                          disabled={loading}
+                          className="w-full sm:w-auto"
+                        >
+                          Connect
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Audit log */}
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              Audit log
+            </h2>
+            <p className="text-sm text-slate-600">
+              Recent events and configuration changes.
+            </p>
+          </div>
+          {(draft.auditLog ?? []).length === 0 ? (
+            <p className="text-sm text-slate-600">No events yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-slate-800">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="py-2 pr-4">Event</th>
+                    <th className="py-2 pr-4">Detail</th>
+                    <th className="py-2 pr-4">Actor</th>
+                    <th className="py-2 pr-4">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(draft.auditLog ?? []).map((event) => (
+                    <tr key={event.id} className="border-t border-slate-100">
+                      <td className="py-2 pr-4 font-medium text-slate-900">
+                        {event.eventType}
+                      </td>
+                      <td className="py-2 pr-4 text-slate-700">{event.detail}</td>
+                      <td className="py-2 pr-4 text-slate-700">{event.actor}</td>
+                      <td className="py-2 pr-4 text-slate-700">
+                        {formatTimestamp(event.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* Data export */}
+        <Card className="p-5 sm:p-6 space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              Data export
+            </h2>
+            <p className="text-sm text-slate-600">
+              Export tickets and audit log as CSV.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={exportTicketsCsv} disabled={loading}>
+              Download tickets CSV
+            </Button>
+            <Button variant="secondary" onClick={exportAuditCsv} disabled={loading}>
+              Download audit log CSV
+            </Button>
+          </div>
+        </Card>
+
         {/* Danger Zone */}
-        <Card className="p-5 sm:p-6 space-y-4 border border-rose-200 bg-rose-50">
+        <Card className="min-w-0 w-full rounded-xl border border-rose-200 bg-rose-50 p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
               <h2 className="text-base font-semibold text-rose-900">
@@ -694,6 +1071,7 @@ export default function SettingsPage() {
           </div>
         </Card>
       ) : null}
+      </div>
     </div>
   );
 }

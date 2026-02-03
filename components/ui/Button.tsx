@@ -6,7 +6,7 @@ import { cn } from "./utils";
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const baseStyles =
-  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-slate-50 disabled:pointer-events-none disabled:opacity-60";
+  "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 disabled:pointer-events-none";
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary: "bg-slate-900 text-white hover:bg-slate-800",

@@ -804,7 +804,7 @@ export default function TicketsPage() {
       />
       <Card className="panel-surface p-5 shadow-sm">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-start sm:content-start sm:gap-2">
             {(
               ["All", "Active", "Open", "In Progress", "Resolved"] as StatusFilter[]
             ).map((status) => (
@@ -812,14 +812,14 @@ export default function TicketsPage() {
                 key={status}
                 type="button"
                 variant={activeFilter === status ? "primary" : "secondary"}
-                className="h-9"
+                className="h-9 w-full justify-center sm:w-auto sm:min-w-[140px] sm:px-4"
                 onClick={() => handleFilterChange(status)}
               >
                 {status} ({counts[status]})
               </Button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-start sm:content-start sm:gap-2 sm:mt-0">
             {(
               [
                 { label: "All", value: ANSWERED_ALL },
@@ -831,7 +831,7 @@ export default function TicketsPage() {
                 key={option.value}
                 type="button"
                 variant={answeredFilter === option.value ? "primary" : "secondary"}
-                className="h-9"
+                className="h-9 w-full justify-center sm:w-auto sm:min-w-[140px] sm:px-4"
                 onClick={() => handleAnsweredChange(option.value)}
               >
                 {option.label} ({answeredCounts[option.value]})

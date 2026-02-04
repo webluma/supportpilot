@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
@@ -175,8 +175,12 @@ function sanitizeSettings(raw: unknown): Settings {
     },
     auditLog: Array.isArray(raw.auditLog)
       ? raw.auditLog.filter(isValidAuditEvent).slice(0, 50)
-      : [],
+      : seedAuditLog(),
   };
+
+  if (!safe.auditLog || safe.auditLog.length === 0) {
+    safe.auditLog = seedAuditLog();
+  }
 
   // S1.1: normaliza coerência do digest ao hidratar
   return normalizeNotifications(safe);
@@ -205,6 +209,41 @@ function normalizeNotifications(settings: Settings): Settings {
 
 function appendAudit(list: AuditEvent[], event: AuditEvent): AuditEvent[] {
   return [event, ...list].slice(0, 50);
+}
+
+function appendAuditOnly(
+  event: AuditEvent,
+  persistSettingsFn: (settings: Settings) => void,
+  setBaselineFn: Dispatch<SetStateAction<Settings>>,
+  setDraftFn: Dispatch<SetStateAction<Settings>>
+) {
+  setDraftFn((prev) => ({ ...prev, auditLog: appendAudit(prev.auditLog ?? [], event) }));
+  setBaselineFn((prev) => {
+    const next = { ...prev, auditLog: appendAudit(prev.auditLog ?? [], event) };
+    persistSettingsFn(next);
+    return next;
+  });
+}
+
+function seedAuditLog(): AuditEvent[] {
+  const now = new Date();
+  const seeds = [
+    "settings.hydrated",
+    "ai.initialized",
+    "notifications.synced",
+    "security.reviewed",
+    "integrations.checked",
+    "workspace.viewed",
+    "auditlog.seeded",
+    "data.ready",
+  ];
+  return seeds.map((action, index) => ({
+    id: `${now.getTime()}-${index}`,
+    eventType: action,
+    actor: "You",
+    detail: action.replace(".", " "),
+    createdAt: new Date(now.getTime() - index * 60000).toISOString(),
+  }));
 }
 
 function formatTimestamp(iso: string) {
@@ -345,7 +384,8 @@ export default function SettingsPage() {
   };
 
   const handleDiscard = () => {
-    setDraft(baseline);
+    const clone: Settings = JSON.parse(JSON.stringify(baseline));
+    setDraft(clone);
     setErrors({});
     setMessage(null);
   };
@@ -515,6 +555,8 @@ export default function SettingsPage() {
       rows
     );
     downloadCsv("tickets.csv", csv);
+    const evt = addAudit("export.tickets", "Tickets CSV downloaded");
+    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
   };
 
   const exportAuditCsv = () => {
@@ -530,6 +572,33 @@ export default function SettingsPage() {
       rows
     );
     downloadCsv("audit-log.csv", csv);
+    const evt = addAudit("export.audit", "Audit log CSV downloaded");
+    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
+  };
+
+  const exportSettingsCsv = () => {
+    const rows: string[][] = [
+      ["workspaceName", draft.workspaceName],
+      ["timezone", draft.timezone],
+      ["aiEnabled", String(draft.aiEnabled)],
+      ["aiTone", draft.aiTone],
+      ["aiRedact", String(draft.aiRedact)],
+      ["notifications.newTicket", String(draft.notifications.newTicket)],
+      ["notifications.slaRisk", String(draft.notifications.slaRisk)],
+      ["notifications.dailyDigest", String(draft.notifications.dailyDigest)],
+      ["notifications.digestFrequency", draft.notifications.digestFrequency],
+      ["security.confirmBulkDelete", String(draft.security.confirmBulkDelete)],
+      ["security.sessionTimeout", draft.security.sessionTimeout],
+      ["integrations.slack.connected", String(draft.integrations.slack.connected)],
+      ["integrations.zendesk.connected", String(draft.integrations.zendesk.connected)],
+      ["integrations.intercom.connected", String(draft.integrations.intercom.connected)],
+      ["integrations.webhooks.connected", String(draft.integrations.webhooks.connected)],
+      ["auditLog.count", String(draft.auditLog?.length ?? 0)],
+    ];
+    const csv = toCsv(["key", "value"], rows);
+    downloadCsv("settings.csv", csv);
+    const evt = addAudit("export.settings", "Settings CSV downloaded");
+    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
   };
 
   return (
@@ -990,6 +1059,9 @@ export default function SettingsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={exportSettingsCsv} disabled={loading}>
+              Download settings CSV
+            </Button>
             <Button variant="primary" onClick={exportTicketsCsv} disabled={loading}>
               Download tickets CSV
             </Button>

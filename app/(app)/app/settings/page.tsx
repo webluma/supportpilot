@@ -28,6 +28,8 @@ type Settings = {
     slack: IntegrationState;
     zendesk: IntegrationState;
     webhooks: IntegrationState;
+    email: IntegrationState;
+    intercom: IntegrationState;
   };
   auditLog: AuditEvent[];
 };
@@ -39,7 +41,7 @@ type IntegrationState = {
   endpoint?: string;
 };
 
-type IntegrationKey = "slack" | "zendesk" | "webhooks";
+type IntegrationKey = "slack" | "zendesk" | "webhooks" | "email" | "intercom";
 
 type AuditEvent = {
   id: string;
@@ -76,8 +78,10 @@ const defaultSettings: Settings = {
     slack: { connected: false },
     zendesk: { connected: false },
     webhooks: { connected: false, endpoint: "" },
+    email: { connected: false },
+    intercom: { connected: false },
   },
-  auditLog: [],
+  auditLog: seedAuditLog(),
 };
 
 const safeId = () => {
@@ -171,6 +175,8 @@ function sanitizeSettings(raw: unknown): Settings {
       slack: normalizeIntegration(raw.integrations?.slack),
       zendesk: normalizeIntegration(raw.integrations?.zendesk),
       webhooks: normalizeIntegration(raw.integrations?.webhooks),
+      email: normalizeIntegration(raw.integrations?.email),
+      intercom: normalizeIntegration(raw.integrations?.intercom),
     },
     auditLog: Array.isArray(raw.auditLog)
       ? raw.auditLog.filter(isValidAuditEvent).slice(0, 50)
@@ -384,9 +390,7 @@ export default function SettingsPage() {
   };
 
   const handleDiscard = () => {
-    const evt = addAudit("settings.discarded", "Changes discarded");
     const clone: Settings = JSON.parse(JSON.stringify(baseline));
-    persistWithAudit(clone, evt);
     setDraft(clone);
     setErrors({});
     setMessage(null);
@@ -614,6 +618,7 @@ export default function SettingsPage() {
       ["integrations.slack.connected", String(draft.integrations.slack.connected)],
       ["integrations.zendesk.connected", String(draft.integrations.zendesk.connected)],
       ["integrations.intercom.connected", String(draft.integrations.intercom.connected)],
+      ["integrations.email.connected", String(draft.integrations.email.connected)],
       ["integrations.webhooks.connected", String(draft.integrations.webhooks.connected)],
       ["auditLog.count", String(draft.auditLog?.length ?? 0)],
     ];
@@ -949,11 +954,13 @@ export default function SettingsPage() {
             {(
               [
                 { key: "slack", title: "Slack", desc: "Send alerts to your Slack workspace." },
+                { key: "email", title: "Email", desc: "Route ticket alerts via email." },
                 { key: "zendesk", title: "Zendesk", desc: "Sync ticket status with Zendesk." },
+                { key: "intercom", title: "Intercom", desc: "Push AI replies to Intercom." },
                 { key: "webhooks", title: "Webhooks", desc: "Send events to your endpoint." },
               ] as const
             ).map((item) => {
-              const integration = draft.integrations[item.key];
+const integration = draft.integrations[item.key];
               const connected = integration.connected;
               const statusText = connected
                 ? integration.lastSyncedAt
@@ -1131,68 +1138,6 @@ export default function SettingsPage() {
         </Card>
 
         {/* Data export */}
-        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-slate-900">
-              Data export
-            </h2>
-            <p className="text-sm text-slate-600">
-              Export settings and workspace data for reporting.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={exportSettingsJson} disabled={loading}>
-              Download settings JSON
-            </Button>
-            <Button variant="secondary" disabled className="opacity-60">
-              Export tickets CSV (Coming soon)
-            </Button>
-          </div>
-        </Card>
-
-        {/* Audit log */}
-        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-slate-900">
-              Audit log
-            </h2>
-            <p className="text-sm text-slate-600">
-              Recent events and configuration changes.
-            </p>
-          </div>
-          {(draft.auditLog ?? []).length === 0 ? (
-            <p className="text-sm text-slate-600">No events yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-slate-800">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
-                    <th className="py-2 pr-4">Event</th>
-                    <th className="py-2 pr-4">Detail</th>
-                    <th className="py-2 pr-4">Actor</th>
-                    <th className="py-2 pr-4">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(draft.auditLog ?? []).map((event) => (
-                    <tr key={event.id} className="border-t border-slate-100">
-                      <td className="py-2 pr-4 font-medium text-slate-900">
-                        {event.eventType}
-                      </td>
-                      <td className="py-2 pr-4 text-slate-700">{event.detail}</td>
-                      <td className="py-2 pr-4 text-slate-700">{event.actor}</td>
-                      <td className="py-2 pr-4 text-slate-700">
-                        {formatTimestamp(event.createdAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        {/* Data export */}
         <Card className="p-5 sm:p-6 space-y-4">
           <div className="space-y-1">
             <h2 className="text-base font-semibold text-slate-900">
@@ -1211,6 +1156,125 @@ export default function SettingsPage() {
             </Button>
             <Button variant="secondary" onClick={exportAuditCsv} disabled={loading}>
               Download audit log CSV
+            </Button>
+          </div>
+        </Card>
+
+        {/* SLAs & Business Hours (read-only) */}
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              SLAs & Business Hours
+            </h2>
+            <p className="text-sm text-slate-600">
+              Define operational targets and working hours used for SLA risk flags and reporting.
+            </p>
+          </div>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="space-y-2 rounded-lg border border-slate-200 p-3 sm:p-4">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-900">SLA targets</p>
+                <Badge variant="secondary">Demo</Badge>
+              </div>
+              <p className="text-sm text-slate-700">First response target: 4h</p>
+              <p className="text-sm text-slate-700">Resolution target: 2d</p>
+              <p className="text-sm text-slate-700">SLA warning threshold: 80% to breach</p>
+              <p className="text-xs text-slate-600">
+                Targets are demo values (editable in a future version).
+              </p>
+            </div>
+            <div className="space-y-2 rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-sm font-semibold text-slate-900">Business hours</p>
+              <p className="text-sm text-slate-700">Mon–Fri, 09:00–18:00</p>
+              <p className="text-xs text-slate-600">Timezone: {draft.timezone}</p>
+              <p className="text-xs text-slate-600">
+                Used for SLA calculations and ticket routing windows.
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Roles & Access (read-only) */}
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              Roles & Access
+            </h2>
+            <p className="text-sm text-slate-600">
+              Control who can access workspace settings and destructive actions.
+            </p>
+          </div>
+
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="space-y-2 rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-sm font-semibold text-slate-900">Your role</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-slate-800">You</p>
+                <Badge variant="default">Admin</Badge>
+              </div>
+              <p className="text-xs text-slate-600">
+                Admins can change workspace settings, AI policies, and routing rules.
+              </p>
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-slate-200 p-3 sm:p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                Permissions (read-only in demo)
+              </p>
+              <p className="text-xs text-slate-600">
+                Role-based access control is coming soon.
+              </p>
+              <div className="space-y-2">
+                {[
+                  "Manage AI policies",
+                  "Connect integrations",
+                  "Export tickets",
+                  "Bulk status updates",
+                  "Delete tickets",
+                  "Reset workspace data",
+                ].map((perm) => (
+                  <label
+                    key={perm}
+                    className="flex items-center gap-2 text-sm text-slate-800"
+                  >
+                    <input type="checkbox" checked readOnly className="h-4 w-4" disabled />
+                    {perm}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-slate-200 p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-900">Members</p>
+              <p className="text-xs text-slate-600">Read-only preview</p>
+            </div>
+            <div className="space-y-2">
+              {[
+                { name: "Gabriella (You)", email: "gabriella@example.com", role: "Admin" },
+                { name: "Alex", email: "alex.agent@example.com", role: "Agent" },
+                { name: "Maya", email: "maya.viewer@example.com", role: "Viewer" },
+              ].map((member) => (
+                <div
+                  key={member.email}
+                  className="flex flex-col gap-2 rounded-md border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{member.name}</p>
+                    <p className="text-xs text-slate-600 break-words">{member.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{member.role}</Badge>
+                    <Button variant="secondary" disabled className="opacity-60">
+                      ...
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button variant="primary" disabled className="opacity-60">
+              Invite member (Coming soon)
             </Button>
           </div>
         </Card>

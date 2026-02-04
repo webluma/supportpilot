@@ -231,23 +231,34 @@ function appendAuditOnly(
 }
 
 function seedAuditLog(): AuditEvent[] {
-  const now = new Date();
   const seeds = [
-    "settings.hydrated",
-    "ai.initialized",
-    "notifications.synced",
-    "security.reviewed",
-    "integrations.checked",
-    "workspace.viewed",
-    "auditlog.seeded",
-    "data.ready",
+    { eventType: "settings.hydrated", detail: "Settings loaded" },
+    { eventType: "ai.initialized", detail: "AI defaults applied" },
+    { eventType: "notifications.synced", detail: "Notifications baseline ready" },
+    { eventType: "security.reviewed", detail: "Security defaults applied" },
+    { eventType: "integrations.checked", detail: "Integrations baseline" },
+    { eventType: "workspace.viewed", detail: "Workspace ready" },
+    { eventType: "auditlog.seeded", detail: "Audit log initialized" },
+    { eventType: "data.ready", detail: "Demo data ready" },
   ];
-  return seeds.map((action, index) => ({
-    id: `${now.getTime()}-${index}`,
-    eventType: action,
+
+  const timestamps = [
+    "2026-02-04T00:00:00.000Z",
+    "2026-02-03T23:59:00.000Z",
+    "2026-02-03T23:58:00.000Z",
+    "2026-02-03T23:57:00.000Z",
+    "2026-02-03T23:56:00.000Z",
+    "2026-02-03T23:55:00.000Z",
+    "2026-02-03T23:54:00.000Z",
+    "2026-02-03T23:53:00.000Z",
+  ];
+
+  return seeds.map((seed, index) => ({
+    id: `seed-${index}`,
+    eventType: seed.eventType,
     actor: "You",
-    detail: action.replace(".", " "),
-    createdAt: new Date(now.getTime() - index * 60000).toISOString(),
+    detail: seed.detail,
+    createdAt: timestamps[index] ?? timestamps[timestamps.length - 1],
   }));
 }
 

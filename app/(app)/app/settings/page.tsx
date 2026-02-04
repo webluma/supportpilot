@@ -27,7 +27,6 @@ type Settings = {
   integrations: {
     slack: IntegrationState;
     zendesk: IntegrationState;
-    intercom: IntegrationState;
     webhooks: IntegrationState;
   };
   auditLog: AuditEvent[];
@@ -39,6 +38,8 @@ type IntegrationState = {
   lastSyncedAt?: string;
   endpoint?: string;
 };
+
+type IntegrationKey = "slack" | "zendesk" | "webhooks";
 
 type AuditEvent = {
   id: string;
@@ -74,7 +75,6 @@ const defaultSettings: Settings = {
   integrations: {
     slack: { connected: false },
     zendesk: { connected: false },
-    intercom: { connected: false },
     webhooks: { connected: false, endpoint: "" },
   },
   auditLog: [],
@@ -170,7 +170,6 @@ function sanitizeSettings(raw: unknown): Settings {
     integrations: {
       slack: normalizeIntegration(raw.integrations?.slack),
       zendesk: normalizeIntegration(raw.integrations?.zendesk),
-      intercom: normalizeIntegration(raw.integrations?.intercom),
       webhooks: normalizeIntegration(raw.integrations?.webhooks),
     },
     auditLog: Array.isArray(raw.auditLog)
@@ -208,7 +207,7 @@ function normalizeNotifications(settings: Settings): Settings {
 }
 
 function appendAudit(list: AuditEvent[], event: AuditEvent): AuditEvent[] {
-  return [event, ...list].slice(0, 50);
+  return [event, ...list].slice(0, 20);
 }
 
 function appendAuditOnly(
@@ -288,6 +287,7 @@ export default function SettingsPage() {
     text: string;
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [connectModal, setConnectModal] = useState<IntegrationKey | null>(null);
   const { tickets, hydrateTickets, isHydrated } = useTicketsStore();
 
   useEffect(() => {
@@ -384,7 +384,9 @@ export default function SettingsPage() {
   };
 
   const handleDiscard = () => {
+    const evt = addAudit("settings.discarded", "Changes discarded");
     const clone: Settings = JSON.parse(JSON.stringify(baseline));
+    persistWithAudit(clone, evt);
     setDraft(clone);
     setErrors({});
     setMessage(null);
@@ -483,8 +485,6 @@ export default function SettingsPage() {
   };
 
   const connectIntegration = (key: keyof Settings["integrations"]) => {
-    const confirmed = window.confirm("Simulated OAuth connect. Continue?");
-    if (!confirmed) return;
     const now = new Date().toISOString();
     const next: Settings = {
       ...draft,
@@ -528,6 +528,28 @@ export default function SettingsPage() {
     return integration.lastSyncedAt
       ? `Last synced: ${formatTimestamp(integration.lastSyncedAt)}`
       : "Connected";
+  };
+
+  const clearAuditLog = () => {
+    const confirmed = window.confirm("Clear all audit log events?");
+    if (!confirmed) return;
+    const next: Settings = { ...draft, auditLog: [] };
+    const evt = addAudit("audit.cleared", "Audit log cleared");
+    persistWithAudit(next, evt);
+    setMessage({ type: "success", text: "Audit log cleared" });
+  };
+
+  const exportSettingsJson = () => {
+    const data = JSON.stringify(draft, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "settings.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    const evt = addAudit("export.settings", "Settings JSON downloaded");
+    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
   };
 
   const exportTicketsCsv = () => {
@@ -920,89 +942,211 @@ export default function SettingsPage() {
               Integrations
             </h2>
             <p className="text-sm text-slate-600">
-              Connect SupportPilot to your stack.
+              Connect external tools to sync tickets and notifications.
             </p>
           </div>
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {(
               [
-                { key: "slack", title: "Slack", desc: "Send alerts to a channel." },
-                { key: "zendesk", title: "Zendesk", desc: "Sync status with Zendesk tickets." },
-                { key: "intercom", title: "Intercom", desc: "Push AI replies to Intercom." },
+                { key: "slack", title: "Slack", desc: "Send alerts to your Slack workspace." },
+                { key: "zendesk", title: "Zendesk", desc: "Sync ticket status with Zendesk." },
                 { key: "webhooks", title: "Webhooks", desc: "Send events to your endpoint." },
               ] as const
             ).map((item) => {
               const integration = draft.integrations[item.key];
               const connected = integration.connected;
+              const statusText = connected
+                ? integration.lastSyncedAt
+                  ? `Last synced: ${formatTimestamp(integration.lastSyncedAt)}`
+                  : "Connected"
+                : "Not connected";
               return (
                 <div
                   key={item.key}
-                  className="space-y-3 rounded-lg border border-slate-200 p-4 shadow-sm min-w-0 w-full overflow-hidden"
+                  className="space-y-3 rounded-lg border border-slate-200 p-4 sm:p-5 lg:p-6 shadow-sm min-w-0 w-full overflow-hidden"
                 >
                   <div className="flex min-w-0 items-start justify-between gap-2">
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-900 truncate">
                         {item.title}
                       </p>
-                      <p className="text-xs text-slate-600 break-words">{item.desc}</p>
+                      <p className="text-xs text-slate-600 break-words">
+                        {item.desc}
+                      </p>
                     </div>
                     <Badge variant={connected ? "default" : "secondary"}>
                       {connected ? "Connected" : "Not connected"}
                     </Badge>
                   </div>
-                  <p className="text-xs text-slate-500 break-words">
-                    {formatLastSynced(integration)}
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {item.key === "webhooks" && !connected ? (
-                      <input
-                        className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
-                        placeholder="https://example.com/webhook"
-                        value={draft.integrations.webhooks.endpoint ?? ""}
-                        onChange={(e) =>
-                          setDraft((prev) => ({
-                            ...prev,
-                            integrations: {
-                              ...prev.integrations,
-                              webhooks: {
-                                ...prev.integrations.webhooks,
-                                endpoint: e.target.value,
-                              },
+                  <p className="text-xs text-slate-500 break-words">{statusText}</p>
+                  {item.key === "webhooks" && !connected ? (
+                    <input
+                      className="w-full min-w-0 max-w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
+                      placeholder="https://example.com/webhook"
+                      value={draft.integrations.webhooks.endpoint ?? ""}
+                      onChange={(e) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          integrations: {
+                            ...prev.integrations,
+                            webhooks: {
+                              ...prev.integrations.webhooks,
+                              endpoint: e.target.value,
                             },
-                          }))
-                        }
-                        disabled={loading}
-                      />
-                    ) : null}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                      {connected ? (
+                          },
+                        }))
+                      }
+                      disabled={loading}
+                    />
+                  ) : null}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    {connected ? (
+                      <>
+                        <Button
+                          variant="primary"
+                          onClick={() => setConnectModal(item.key)}
+                          disabled={loading}
+                          className="w-full sm:w-auto"
+                        >
+                          Manage
+                        </Button>
                         <Button
                           variant="secondary"
-                          onClick={() =>
-                            disconnectIntegration(item.key as keyof Settings["integrations"])
-                          }
+                          onClick={() => disconnectIntegration(item.key)}
                           disabled={loading}
                           className="w-full sm:w-auto"
                         >
                           Disconnect
                         </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          onClick={() =>
-                            connectIntegration(item.key as keyof Settings["integrations"])
-                          }
-                          disabled={loading}
-                          className="w-full sm:w-auto"
-                        >
-                          Connect
-                        </Button>
-                      )}
-                    </div>
+                      </>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        onClick={() => setConnectModal(item.key)}
+                        disabled={loading}
+                        className="w-full sm:w-auto"
+                      >
+                        Connect
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
             })}
+          </div>
+          {connectModal ? (
+            <div className="fixed inset-0 z-20 flex items-center justify-center px-4 sm:px-6">
+              <div
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setConnectModal(null)}
+              />
+              <div className="relative w-full max-w-md min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-xl space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {`Connect ${connectModal}`}
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    Allow SupportPilot to sync tickets and notifications with {connectModal}.
+                  </p>
+                </div>
+                <div className="space-y-2 text-sm text-slate-700">
+                  <p>Permissions: basic profile, workspace access, send notifications.</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setConnectModal(null)}
+                    className="w-full sm:w-auto"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (!connectModal) return;
+                      connectIntegration(connectModal);
+                      setConnectModal(null);
+                    }}
+                    className="w-full sm:w-auto"
+                  >
+                    Confirm connection
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </Card>
+
+        {/* Audit log */}
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              Audit log
+            </h2>
+            <p className="text-sm text-slate-600">
+              Track recent configuration changes in this workspace.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-slate-600">
+              Last {Math.min(20, draft.auditLog?.length ?? 0)} events.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={clearAuditLog}
+              disabled={loading || (draft.auditLog ?? []).length === 0}
+            >
+              Clear log
+            </Button>
+          </div>
+          {(draft.auditLog ?? []).length === 0 ? (
+            <p className="text-sm text-slate-600">No events yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-slate-800">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="py-2 pr-4">Time</th>
+                    <th className="py-2 pr-4">Event</th>
+                    <th className="py-2 pr-4">Actor</th>
+                    <th className="py-2 pr-4">Metadata</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(draft.auditLog ?? []).map((event) => (
+                    <tr key={event.id} className="border-t border-slate-100">
+                      <td className="py-2 pr-4 text-slate-700">
+                        {formatTimestamp(event.createdAt)}
+                      </td>
+                      <td className="py-2 pr-4 font-medium text-slate-900">
+                        {event.eventType}
+                      </td>
+                      <td className="py-2 pr-4 text-slate-700">{event.actor}</td>
+                      <td className="py-2 pr-4 text-slate-700">{event.detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* Data export */}
+        <Card className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-5 sm:p-6 lg:p-7 xl:p-8 shadow-sm space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              Data export
+            </h2>
+            <p className="text-sm text-slate-600">
+              Export settings and workspace data for reporting.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={exportSettingsJson} disabled={loading}>
+              Download settings JSON
+            </Button>
+            <Button variant="secondary" disabled className="opacity-60">
+              Export tickets CSV (Coming soon)
+            </Button>
           </div>
         </Card>
 

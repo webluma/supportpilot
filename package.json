@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --import tsx --test \"lib/**/*.test.ts\"",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "quality": "npm run lint && npm run test",
+    "quality:full": "npm run quality && npm run build && npm run e2e",
+    "release:check": "npm run quality:full"
   },
   "dependencies": {
     "next": "16.1.3",

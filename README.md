@@ -58,7 +58,10 @@ npm run build
 Testing:
 ```bash
 npm run test        # unit tests (Node test runner via tsx)
-npm run e2e         # Playwright E2E (start dev server separately; run `npx playwright install` once)
+npm run e2e         # Playwright E2E
+npm run quality     # lint + unit tests
+npm run quality:full # quality + production build + e2e
+npm run release:check # alias for quality:full
 ```
 
 ## Environment Variables

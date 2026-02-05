@@ -28,9 +28,8 @@ test.describe("Settings mobile hardening", () => {
 
     await page.getByRole("button", { name: /Cancel|Close/ }).click();
 
-    await page.getByRole("button", { name: "Export tickets CSV" }).click();
     await expect(
-      page.getByRole("heading", { name: "Audit log" })
-    ).toBeVisible();
+      page.getByRole("button", { name: "Export tickets CSV (Coming soon)" })
+    ).toBeDisabled();
   });
 });

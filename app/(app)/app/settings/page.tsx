@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useTicketsStore } from "@/store/useTicketsStore";
+import { appendAuditEntry } from "@/lib/audit";
+import { toCsv } from "@/lib/csv";
 
 type Settings = {
   workspaceName: string;
@@ -213,19 +215,21 @@ function normalizeNotifications(settings: Settings): Settings {
   return settings;
 }
 
-function appendAudit(list: AuditEvent[], event: AuditEvent): AuditEvent[] {
-  return [event, ...list].slice(0, 20);
-}
-
 function appendAuditOnly(
   event: AuditEvent,
   persistSettingsFn: (settings: Settings) => void,
   setBaselineFn: Dispatch<SetStateAction<Settings>>,
   setDraftFn: Dispatch<SetStateAction<Settings>>
 ) {
-  setDraftFn((prev) => ({ ...prev, auditLog: appendAudit(prev.auditLog ?? [], event) }));
+  setDraftFn((prev) => ({
+    ...prev,
+    auditLog: appendAuditEntry(prev.auditLog ?? [], event),
+  }));
   setBaselineFn((prev) => {
-    const next = { ...prev, auditLog: appendAudit(prev.auditLog ?? [], event) };
+    const next = {
+      ...prev,
+      auditLog: appendAuditEntry(prev.auditLog ?? [], event),
+    };
     persistSettingsFn(next);
     return next;
   });
@@ -276,14 +280,6 @@ function formatTimestamp(iso: string) {
   } catch {
     return iso;
   }
-}
-
-function toCsv(headers: string[], rows: string[][]) {
-  const escape = (val: string) => `"${val.replace(/"/g, '""')}"`;
-  return [
-    headers.map(escape).join(","),
-    ...rows.map((r) => r.map(escape).join(",")),
-  ].join("\n");
 }
 
 function downloadCsv(filename: string, csv: string) {
@@ -375,7 +371,9 @@ export default function SettingsPage() {
   const persistWithAudit = (settings: Settings, evt?: AuditEvent) => {
     const next: Settings = {
       ...settings,
-      auditLog: evt ? appendAudit(settings.auditLog ?? [], evt) : settings.auditLog ?? [],
+      auditLog: evt
+        ? appendAuditEntry(settings.auditLog ?? [], evt)
+        : settings.auditLog ?? [],
     };
     persistSettings(next);
     setBaseline(next);

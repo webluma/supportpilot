@@ -1,5 +1,6 @@
 "use client";
 
+// PRODUCT GATING: se a feature não melhora triagem, resposta IA, handoff de QA ou resolução de tickets, vai para backlog.
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/PageHeader";

@@ -55,6 +55,12 @@ npm run lint
 npm run build
 ```
 
+Testing:
+```bash
+npm run test        # unit tests (Node test runner via tsx)
+npm run e2e         # Playwright E2E (start dev server separately; run `npx playwright install` once)
+```
+
 ## Environment Variables
 Create a `.env.local` file at the project root:
 ```bash

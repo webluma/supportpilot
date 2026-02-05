@@ -7,9 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { useTicketsStore } from "@/store/useTicketsStore";
 import { appendAuditEntry } from "@/lib/audit";
-import { toCsv } from "@/lib/csv";
 
 type Settings = {
   workspaceName: string;
@@ -303,16 +301,6 @@ function formatTimestamp(iso: string) {
   }
 }
 
-function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function SettingsPage() {
   const [baseline, setBaseline] = useState<Settings>(defaultSettings);
   const [draft, setDraft] = useState<Settings>(defaultSettings);
@@ -323,11 +311,6 @@ export default function SettingsPage() {
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [connectModal, setConnectModal] = useState<IntegrationKey | null>(null);
-  const { tickets, hydrateTickets, isHydrated } = useTicketsStore();
-
-  useEffect(() => {
-    if (!isHydrated) hydrateTickets();
-  }, [isHydrated, hydrateTickets]);
 
   // Hydrate from localStorage (com guard + sanitize)
   useEffect(() => {
@@ -575,47 +558,6 @@ export default function SettingsPage() {
     a.click();
     URL.revokeObjectURL(url);
     const evt = addAudit("export.settings", "Settings JSON downloaded");
-    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
-  };
-
-  const exportTicketsCsv = () => {
-    const rows = tickets.map((t) => {
-      const clean = (val?: string) =>
-        (val ?? "").toString().replace(/\s+/g, " ").slice(0, 1000);
-      return [
-        t.id,
-        t.createdAt,
-        t.channel,
-        t.category,
-        t.priority,
-        t.status,
-        t.answeredAt ? "true" : "false",
-        t.answeredAt ?? "",
-        t.resolvedAt ?? "",
-        clean(t.title),
-        clean(t.description),
-        clean(t.aiOutput?.customerReply),
-        clean(t.aiOutput?.qaSummary),
-      ];
-    });
-    const headers = [
-      "id",
-      "createdAt",
-      "channel",
-      "category",
-      "priority",
-      "status",
-      "answered",
-      "answeredAt",
-      "resolvedAt",
-      "title",
-      "description",
-      "aiCustomerReply",
-      "aiQaSummary",
-    ];
-    const csv = toCsv(headers, rows);
-    downloadCsv("tickets.csv", csv);
-    const evt = addAudit("ticket.export_csv", "Tickets CSV downloaded");
     appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
   };
 
@@ -1137,16 +1079,25 @@ const integration = draft.integrations[item.key];
               Data export
             </h2>
             <p className="text-sm text-slate-600">
-              Export settings and workspace data for reporting.
+              Export workspace configuration snapshots for reporting.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={exportSettingsJson} disabled={loading}>
-              Download settings JSON
-            </Button>
-            <Button variant="secondary" onClick={exportTicketsCsv} disabled={loading}>
-              Export tickets CSV
-            </Button>
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                onClick={exportSettingsJson}
+                disabled={loading}
+              >
+                Download settings JSON
+              </Button>
+              <Button variant="secondary" disabled>
+                Export tickets CSV (Coming soon)
+              </Button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Ticket-level export is planned for a future release.
+            </p>
           </div>
         </Card>
 

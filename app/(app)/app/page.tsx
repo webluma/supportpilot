@@ -8,68 +8,12 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useTicketsStore } from "@/store/useTicketsStore";
+import { computeTicketMetrics } from "@/lib/metrics";
 
 export default function DashboardPage() {
   const tickets = useTicketsStore((state) => state.tickets);
 
-  const metrics = useMemo(() => {
-    const base = {
-      total: tickets.length,
-      open: 0,
-      resolved: 0,
-      pendingAi: 0,
-      avgFirstResponseHrs: 0,
-      avgResolutionHrs: 0,
-      atRisk: 0,
-    };
-
-    const slaFirstHrs = 4;
-    const slaResolutionHrs = 48;
-
-    let firstResponseSum = 0;
-    let firstResponseCount = 0;
-    let resolutionSum = 0;
-    let resolutionCount = 0;
-
-    const now = Date.now();
-    tickets.forEach((t) => {
-      if (t.status === "Resolved") base.resolved += 1;
-      else base.open += 1;
-      if (!t.aiOutput) base.pendingAi += 1;
-
-      if (t.answeredAt) {
-        const delta = Date.parse(t.answeredAt) - Date.parse(t.createdAt);
-        if (!Number.isNaN(delta) && delta > 0) {
-          firstResponseSum += delta;
-          firstResponseCount += 1;
-        }
-      }
-
-      if (t.resolvedAt) {
-        const delta = Date.parse(t.resolvedAt) - Date.parse(t.createdAt);
-        if (!Number.isNaN(delta) && delta > 0) {
-          resolutionSum += delta;
-          resolutionCount += 1;
-        }
-      }
-
-      const created = Date.parse(t.createdAt);
-      if (!Number.isNaN(created) && t.status !== "Resolved") {
-        const ageHrs = (now - created) / 36e5;
-        const threshold = Math.min(slaFirstHrs, slaResolutionHrs);
-        if (ageHrs > threshold * 0.75) {
-          base.atRisk += 1;
-        }
-      }
-    });
-
-    base.avgFirstResponseHrs =
-      firstResponseCount === 0 ? 0 : Number((firstResponseSum / firstResponseCount / 36e5).toFixed(1));
-    base.avgResolutionHrs =
-      resolutionCount === 0 ? 0 : Number((resolutionSum / resolutionCount / 36e5).toFixed(1));
-
-    return base;
-  }, [tickets]);
+  const metrics = useMemo(() => computeTicketMetrics(tickets), [tickets]);
 
   const recentTickets = tickets.slice(0, 5);
 

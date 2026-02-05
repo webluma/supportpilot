@@ -26,6 +26,7 @@ export type TicketAiOutput = {
   followUpQuestions: string[];
   generatedAt: string;
   model: string;
+  version: number;
 };
 
 export type Ticket = {
@@ -46,6 +47,7 @@ export type Ticket = {
   resolvedAt?: string;
   aiOutput?: TicketAiOutput;
   aiOutputHistory?: TicketAiOutput[];
+  aiOutputVersionCounter?: number;
 };
 
 export type CreateTicketInput = {

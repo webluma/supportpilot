@@ -17,6 +17,15 @@ const baseTicket = {
   updatedAt: "2026-02-01T00:00:00.000Z",
 } as Ticket;
 
+const mockAiOutput = {
+  customerReply: "Thanks for reaching out.",
+  qaSummary: "Issue reproduced and triaged.",
+  followUpQuestions: ["Can you share a screen recording?"],
+  generatedAt: "2026-02-01T05:00:00.000Z",
+  model: "gpt-5-nano",
+  version: 1,
+};
+
 test("computeTicketMetrics with no tickets", () => {
   const metrics = computeTicketMetrics([]);
   assert.equal(metrics.total, 0);
@@ -31,7 +40,7 @@ test("computeTicketMetrics averages and counts", () => {
       id: "a",
       status: "Open",
       answeredAt: "2026-02-01T04:00:00.000Z",
-      aiOutput: {} as any,
+      aiOutput: mockAiOutput,
     },
     {
       ...baseTicket,
@@ -39,7 +48,7 @@ test("computeTicketMetrics averages and counts", () => {
       status: "Resolved",
       answeredAt: "2026-02-01T02:00:00.000Z",
       resolvedAt: "2026-02-02T00:00:00.000Z",
-      aiOutput: {} as any,
+      aiOutput: mockAiOutput,
     },
   ];
 

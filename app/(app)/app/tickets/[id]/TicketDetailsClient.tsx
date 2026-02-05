@@ -101,6 +101,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   const [aiState, setAiState] = useState<AiState>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<CopyKey | null>(null);
+  const [copyErrorKey, setCopyErrorKey] = useState<CopyKey | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [replyCopied, setReplyCopied] = useState(false);
   const [replyCopyError, setReplyCopyError] = useState<string | null>(null);
@@ -109,27 +110,17 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   >({ kind: "latest" });
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastCopyKeyRef = useRef<CopyKey | null>(null);
 
   useEffect(() => {
     hydrateTickets();
   }, [hydrateTickets]);
-
-  useEffect(() => {
-    setAiState("idle");
-    setAiError(null);
-    setReplyCopied(false);
-    setReplyCopyError(null);
-    setSelectedAi({ kind: "latest" });
-  }, [id]);
-
-  const historyOutputs = ticket?.aiOutputHistory ?? [];
   const latestOutput = ticket?.aiOutput ?? null;
   const allVersions = useMemo(() => {
     const versions: TicketAiOutput[] = [];
     if (latestOutput) {
       versions.push(latestOutput);
     }
+    const historyOutputs = ticket?.aiOutputHistory ?? [];
     if (historyOutputs.length > 0) {
       historyOutputs.forEach((item) => versions.push(item));
     }
@@ -140,29 +131,21 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     return Array.from(uniqueByVersion.values()).sort(
       (a, b) => a.version - b.version,
     );
-  }, [latestOutput, historyOutputs]);
+  }, [latestOutput, ticket?.aiOutputHistory]);
+  const selectedVersionOutput =
+    selectedAi.kind === "version"
+      ? allVersions.find((item) => item.version === selectedAi.version) ?? null
+      : null;
+  const effectiveSelectedAi =
+    selectedAi.kind === "version" && !selectedVersionOutput
+      ? { kind: "latest" as const }
+      : selectedAi;
   const displayedOutput =
-    selectedAi.kind === "latest"
+    effectiveSelectedAi.kind === "latest"
       ? latestOutput
-      : allVersions.find((item) => item.version === selectedAi.version) ??
-        latestOutput;
+      : selectedVersionOutput ?? latestOutput;
   const totalVersions = latestOutput ? allVersions.length : 0;
   const shouldShowVersionSelector = totalVersions >= 2;
-
-  useEffect(() => {
-    if (
-      selectedAi.kind === "version" &&
-      !allVersions.find((item) => item.version === selectedAi.version)
-    ) {
-      setSelectedAi({ kind: "latest" });
-    }
-  }, [allVersions, selectedAi]);
-
-  useEffect(() => {
-    if (ticket?.aiOutput?.generatedAt) {
-      setSelectedAi({ kind: "latest" });
-    }
-  }, [ticket?.aiOutput?.generatedAt]);
 
   useEffect(() => {
     return () => {
@@ -243,8 +226,8 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
   };
 
   const handleCopy = async (key: CopyKey, text: string) => {
-    lastCopyKeyRef.current = key;
     setCopyError(null);
+    setCopyErrorKey(null);
 
     if (copyTimeoutRef.current) {
       clearTimeout(copyTimeoutRef.current);
@@ -261,10 +244,13 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
     }
 
     setCopiedKey(null);
+    setCopyErrorKey(key);
     setCopyError("Copy failed. Please try again.");
   };
 
-  const handleCopyCustomerReply = async (output?: TicketAiOutput) => {
+  const handleCopyCustomerReply = async (
+    output?: TicketAiOutput | null
+  ) => {
     if (!output || aiState === "loading") {
       return;
     }
@@ -478,9 +464,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                     </p>
                     <p className="text-xs text-slate-500">
                       Selected:{" "}
-                      {selectedAi.kind === "latest"
+                      {effectiveSelectedAi.kind === "latest"
                         ? `LATEST (Version ${latestOutput?.version ?? "—"})`
-                        : `Version ${selectedAi.version}`}
+                        : `Version ${effectiveSelectedAi.version}`}
                     </p>
                   </div>
                   <span className="text-xs text-slate-500">
@@ -494,7 +480,9 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                   <Button
                     type="button"
                     variant={
-                      selectedAi.kind === "latest" ? "primary" : "secondary"
+                      effectiveSelectedAi.kind === "latest"
+                        ? "primary"
+                        : "secondary"
                     }
                     onClick={() => setSelectedAi({ kind: "latest" })}
                     disabled={aiState === "loading"}
@@ -504,8 +492,8 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                   {allVersions.map((version) => {
                     const historyKeyBase = version.generatedAt ?? "history";
                     const isSelected =
-                      selectedAi.kind === "version" &&
-                      selectedAi.version === version.version;
+                      effectiveSelectedAi.kind === "version" &&
+                      effectiveSelectedAi.version === version.version;
                     return (
                       <Button
                         key={`${historyKeyBase}-${version.version}`}
@@ -554,7 +542,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                 <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
                   {displayedOutput?.customerReply}
                 </p>
-                {copyError && lastCopyKeyRef.current === "customer" ? (
+                {copyError && copyErrorKey === "customer" ? (
                   <span className="text-xs text-rose-600">
                     Copy failed. Please try again.
                   </span>
@@ -587,7 +575,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                 <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
                   {displayedOutput?.qaSummary}
                 </p>
-                {copyError && lastCopyKeyRef.current === "qa" ? (
+                {copyError && copyErrorKey === "qa" ? (
                   <span className="text-xs text-rose-600">
                     Copy failed. Please try again.
                   </span>
@@ -639,7 +627,7 @@ export default function TicketDetailsClient({ id }: TicketDetailsClientProps) {
                     },
                   )}
                 </ul>
-                {copyError && lastCopyKeyRef.current === "followups" ? (
+                {copyError && copyErrorKey === "followups" ? (
                   <span className="text-xs text-rose-600">
                     Copy failed. Please try again.
                   </span>

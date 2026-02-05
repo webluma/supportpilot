@@ -99,16 +99,12 @@ function mergeEnvironment(
     return detected;
   }
 
-  const merged: TicketEnvironment = { ...detected };
-  (Object.entries(provided) as Array<[keyof TicketEnvironment, string | undefined]>).forEach(
-    ([key, value]) => {
-      if (value !== undefined) {
-        merged[key] = value;
-      }
-    },
-  );
-
-  return merged;
+  return {
+    browser: provided.browser ?? detected.browser,
+    os: provided.os ?? detected.os,
+    deviceType: provided.deviceType ?? detected.deviceType,
+    userAgent: provided.userAgent ?? detected.userAgent,
+  };
 }
 
 export function getTickets(): Ticket[] {

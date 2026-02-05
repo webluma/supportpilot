@@ -46,6 +46,11 @@ type IntegrationState = {
 
 type IntegrationKey = "slack" | "zendesk" | "webhooks" | "email" | "intercom";
 
+type Timezone = "UTC" | "America/Sao_Paulo" | "Europe/Lisbon";
+type Tone = "Professional" | "Friendly" | "Direct";
+type DigestFrequency = "Daily" | "Weekly" | "Off";
+type SessionTimeout = "15m" | "30m" | "60m" | "4h";
+
 type AuditEvent = {
   id: string;
   eventType: string;
@@ -98,28 +103,45 @@ const safeId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const isValidAuditEvent = (event: any): event is AuditEvent => {
+const isValidAuditEvent = (event: unknown): event is AuditEvent => {
+  if (!event || typeof event !== "object") {
+    return false;
+  }
+  const value = event as Record<string, unknown>;
   return (
-    event &&
-    typeof event === "object" &&
-    typeof event.id === "string" &&
-    typeof event.eventType === "string" &&
-    typeof event.actor === "string" &&
-    typeof event.detail === "string" &&
-    typeof event.createdAt === "string"
+    typeof value.id === "string" &&
+    typeof value.eventType === "string" &&
+    typeof value.actor === "string" &&
+    typeof value.detail === "string" &&
+    typeof value.createdAt === "string"
   );
 };
 
-const normalizeIntegration = (value: any): IntegrationState => {
+const normalizeIntegration = (value: unknown): IntegrationState => {
   if (!value || typeof value !== "object") return { connected: false };
+  const integration = value as Record<string, unknown>;
   return {
-    connected: !!value.connected,
+    connected: Boolean(integration.connected),
     connectedAt:
-      typeof value.connectedAt === "string" ? value.connectedAt : undefined,
+      typeof integration.connectedAt === "string"
+        ? integration.connectedAt
+        : undefined,
     lastSyncedAt:
-      typeof value.lastSyncedAt === "string" ? value.lastSyncedAt : undefined,
-    endpoint: typeof value.endpoint === "string" ? value.endpoint : undefined,
+      typeof integration.lastSyncedAt === "string"
+        ? integration.lastSyncedAt
+        : undefined,
+    endpoint:
+      typeof integration.endpoint === "string"
+        ? integration.endpoint
+        : undefined,
   };
+};
+
+const isOneOf = <T extends readonly string[]>(
+  value: unknown,
+  options: T
+): value is T[number] => {
+  return typeof value === "string" && options.includes(value as T[number]);
 };
 
 function isValidSettings(raw: unknown): raw is Settings {
@@ -152,25 +174,24 @@ function sanitizeSettings(raw: unknown): Settings {
   const safe: Settings = {
     ...raw,
     workspaceName: raw.workspaceName ?? defaultSettings.workspaceName,
-    timezone: timezones.includes(raw.timezone as any)
+    timezone: isOneOf(raw.timezone, timezones)
       ? raw.timezone
       : defaultSettings.timezone,
-    aiTone: tones.includes(raw.aiTone as any)
+    aiTone: isOneOf(raw.aiTone, tones)
       ? raw.aiTone
       : defaultSettings.aiTone,
     notifications: {
       ...raw.notifications,
-      digestFrequency: digestFrequencies.includes(
-        raw.notifications.digestFrequency as any
+      digestFrequency: isOneOf(
+        raw.notifications.digestFrequency,
+        digestFrequencies
       )
         ? raw.notifications.digestFrequency
         : defaultSettings.notifications.digestFrequency,
     },
     security: {
       ...raw.security,
-      sessionTimeout: sessionTimeouts.includes(
-        raw.security.sessionTimeout as any
-      )
+      sessionTimeout: isOneOf(raw.security.sessionTimeout, sessionTimeouts)
         ? raw.security.sessionTimeout
         : defaultSettings.security.sessionTimeout,
     },
@@ -336,18 +357,16 @@ export default function SettingsPage() {
     if (name.length < 2 || name.length > 40) {
       nextErrors.workspaceName = "Name must be between 2 and 40 characters.";
     }
-    if (!timezones.includes(draft.timezone as any)) {
+    if (!isOneOf(draft.timezone, timezones)) {
       nextErrors.timezone = "Select a valid timezone.";
     }
-    if (!tones.includes(draft.aiTone as any)) {
+    if (!isOneOf(draft.aiTone, tones)) {
       nextErrors.aiTone = "Select a valid tone.";
     }
-    if (
-      !digestFrequencies.includes(draft.notifications.digestFrequency as any)
-    ) {
+    if (!isOneOf(draft.notifications.digestFrequency, digestFrequencies)) {
       nextErrors.digestFrequency = "Select a valid frequency.";
     }
-    if (!sessionTimeouts.includes(draft.security.sessionTimeout as any)) {
+    if (!isOneOf(draft.security.sessionTimeout, sessionTimeouts)) {
       nextErrors.sessionTimeout = "Select a valid session timeout.";
     }
 
@@ -414,7 +433,7 @@ export default function SettingsPage() {
   };
 
   // S1.1: handlers explícitos, sem useEffect “auto-corrigindo” que trava UX
-  const setDigestFrequency = (value: string) => {
+  const setDigestFrequency = (value: DigestFrequency) => {
     setDraft((prev) => {
       const next: Settings = {
         ...prev,
@@ -537,13 +556,6 @@ export default function SettingsPage() {
     setMessage({ type: "success", text: `${String(key)} disconnected` });
   };
 
-  const formatLastSynced = (integration: IntegrationState) => {
-    if (!integration.connected) return "Not connected";
-    return integration.lastSyncedAt
-      ? `Last synced: ${formatTimestamp(integration.lastSyncedAt)}`
-      : "Connected";
-  };
-
   const clearAuditLog = () => {
     const confirmed = window.confirm("Clear all audit log events?");
     if (!confirmed) return;
@@ -604,49 +616,6 @@ export default function SettingsPage() {
     const csv = toCsv(headers, rows);
     downloadCsv("tickets.csv", csv);
     const evt = addAudit("ticket.export_csv", "Tickets CSV downloaded");
-    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
-  };
-
-  const exportAuditCsv = () => {
-    const rows = (draft.auditLog ?? []).map((e) => [
-      e.id,
-      e.eventType,
-      e.actor,
-      e.detail,
-      e.createdAt,
-    ]);
-    const csv = toCsv(
-      ["id", "eventType", "actor", "detail", "createdAt"],
-      rows
-    );
-    downloadCsv("audit-log.csv", csv);
-    const evt = addAudit("export.audit", "Audit log CSV downloaded");
-    appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
-  };
-
-  const exportSettingsCsv = () => {
-    const rows: string[][] = [
-      ["workspaceName", draft.workspaceName],
-      ["timezone", draft.timezone],
-      ["aiEnabled", String(draft.aiEnabled)],
-      ["aiTone", draft.aiTone],
-      ["aiRedact", String(draft.aiRedact)],
-      ["notifications.newTicket", String(draft.notifications.newTicket)],
-      ["notifications.slaRisk", String(draft.notifications.slaRisk)],
-      ["notifications.dailyDigest", String(draft.notifications.dailyDigest)],
-      ["notifications.digestFrequency", draft.notifications.digestFrequency],
-      ["security.confirmBulkDelete", String(draft.security.confirmBulkDelete)],
-      ["security.sessionTimeout", draft.security.sessionTimeout],
-      ["integrations.slack.connected", String(draft.integrations.slack.connected)],
-      ["integrations.zendesk.connected", String(draft.integrations.zendesk.connected)],
-      ["integrations.intercom.connected", String(draft.integrations.intercom.connected)],
-      ["integrations.email.connected", String(draft.integrations.email.connected)],
-      ["integrations.webhooks.connected", String(draft.integrations.webhooks.connected)],
-      ["auditLog.count", String(draft.auditLog?.length ?? 0)],
-    ];
-    const csv = toCsv(["key", "value"], rows);
-    downloadCsv("settings.csv", csv);
-    const evt = addAudit("export.settings", "Settings CSV downloaded");
     appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
   };
 
@@ -722,7 +691,9 @@ export default function SettingsPage() {
                 id="timezone"
                 name="timezone"
                 value={draft.timezone}
-                onChange={(e) => updateField("timezone", e.target.value)}
+                onChange={(e) =>
+                  updateField("timezone", e.target.value as Timezone)
+                }
                 className={`w-full rounded-md border px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white ${
                   errors.timezone ? "border-amber-400" : "border-slate-200"
                 }`}
@@ -778,7 +749,7 @@ export default function SettingsPage() {
                   id="aiTone"
                   name="aiTone"
                   value={draft.aiTone}
-                  onChange={(e) => updateField("aiTone", e.target.value)}
+                  onChange={(e) => updateField("aiTone", e.target.value as Tone)}
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
                   disabled={!draft.aiEnabled || loading}
                 >
@@ -1003,7 +974,7 @@ const integration = draft.integrations[item.key];
                         {item.desc}
                       </p>
                     </div>
-                    <Badge variant={connected ? "default" : "secondary"}>
+                    <Badge variant={connected ? "success" : "default"}>
                       {connected ? "Connected" : "Not connected"}
                     </Badge>
                   </div>
@@ -1193,7 +1164,7 @@ const integration = draft.integrations[item.key];
             <div className="space-y-2 rounded-lg border border-slate-200 p-3 sm:p-4">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-slate-900">SLA targets</p>
-                <Badge variant="secondary">Demo</Badge>
+                <Badge variant="default">Demo</Badge>
               </div>
               <p className="text-sm text-slate-700">First response target: 4h</p>
               <p className="text-sm text-slate-700">Resolution target: 2d</p>
@@ -1284,7 +1255,7 @@ const integration = draft.integrations[item.key];
                     <p className="text-xs text-slate-600 break-words">{member.email}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{member.role}</Badge>
+                    <Badge variant="default">{member.role}</Badge>
                     <Button variant="secondary" disabled className="opacity-60">
                       ...
                     </Button>

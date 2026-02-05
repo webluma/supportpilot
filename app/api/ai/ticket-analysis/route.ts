@@ -183,8 +183,7 @@ export async function POST(request: Request) {
     if (error instanceof OpenAI.APIError) {
       const upstreamStatus = error.status ?? 500;
       const status = upstreamStatus >= 500 ? 502 : upstreamStatus;
-      const errorPayload = (error as OpenAI.APIError & { error?: unknown })
-        .error;
+      const errorPayload = (error as { error?: unknown }).error;
       const openAiMessage =
         (errorPayload as { message?: string })?.message ?? error.message;
       const openAiType =

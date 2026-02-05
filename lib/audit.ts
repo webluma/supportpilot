@@ -1,4 +1,10 @@
-import type { AuditEvent } from "@/lib/tickets/types";
+export type AuditEvent = {
+  id: string;
+  eventType: string;
+  actor: string;
+  detail: string;
+  createdAt: string;
+};
 
 export function appendAuditEntry(
   list: AuditEvent[] = [],

@@ -85,11 +85,15 @@ export default function NewTicketPage() {
       return;
     }
 
+    const selectedCategory = category as TicketCategory;
+    const selectedPriority = priority as TicketPriority;
+    const selectedChannel = channel as TicketChannel;
+
     const payload: CreateTicketInput = {
       title: trimmedTitle,
-      category,
-      priority,
-      channel,
+      category: selectedCategory,
+      priority: selectedPriority,
+      channel: selectedChannel,
       description: trimmedDescription,
     };
 

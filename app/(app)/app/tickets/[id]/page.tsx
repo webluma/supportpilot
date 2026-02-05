@@ -12,5 +12,5 @@ export default async function TicketDetailsPage({
   params,
 }: TicketDetailsPageProps) {
   const resolvedParams = await Promise.resolve(params);
-  return <TicketDetailsClient id={resolvedParams.id} />;
+  return <TicketDetailsClient key={resolvedParams.id} id={resolvedParams.id} />;
 }

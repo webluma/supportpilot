@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -78,7 +78,7 @@ const sortOptionLabels: Record<SortOption, string> = {
 
 const PAGE_SIZE = 10;
 
-export default function TicketsPage() {
+function TicketsPageContent() {
   const tickets = useTicketsStore((state) => state.tickets);
   const isHydrated = useTicketsStore((state) => state.isHydrated);
   const hydrateTickets = useTicketsStore((state) => state.hydrateTickets);
@@ -136,26 +136,30 @@ export default function TicketsPage() {
     : ANSWERED_ALL;
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(
-    activeCategoryFromQuery
-  );
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(
-    activePriorityFromQuery
-  );
-  const [answeredFilter, setAnsweredFilter] = useState<AnsweredFilter>(
-    activeAnsweredFromQuery
-  );
+  const [bulkAiState, setBulkAiState] = useState<{
+    status: "idle" | "running" | "error";
+    total: number;
+    processed: number;
+    success: number;
+    failed: Array<{ id: string; message: string; status?: number }>;
+    skipped: number;
+    globalError?: string | null;
+  }>({
+    status: "idle",
+    total: 0,
+    processed: 0,
+    success: 0,
+    failed: [],
+    skipped: 0,
+    globalError: null,
+  });
+  const categoryFilter = activeCategoryFromQuery;
+  const priorityFilter = activePriorityFromQuery;
+  const answeredFilter = activeAnsweredFromQuery;
 
   useEffect(() => {
     hydrateTickets();
   }, [hydrateTickets]);
-
-  useEffect(() => {
-    setCategoryFilter(activeCategoryFromQuery);
-    setPriorityFilter(activePriorityFromQuery);
-    setAnsweredFilter(activeAnsweredFromQuery);
-  }, [activeCategoryFromQuery, activePriorityFromQuery, activeAnsweredFromQuery]);
 
   const counts = useMemo(() => {
     const base = tickets.reduce(
@@ -332,87 +336,90 @@ export default function TicketsPage() {
     paginatedTickets.length > 0 &&
     paginatedTickets.every((ticket) => selectedIds.has(ticket.id));
 
-  const updateQuery = (next: {
-    status?: StatusFilter;
-    category?: CategoryFilter;
-    priority?: PriorityFilter;
-    answered?: AnsweredFilter;
-    q?: string;
-    sort?: SortOption;
-    page?: number;
-  }) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("pageSize");
+  const updateQuery = useCallback(
+    (next: {
+      status?: StatusFilter;
+      category?: CategoryFilter;
+      priority?: PriorityFilter;
+      answered?: AnsweredFilter;
+      q?: string;
+      sort?: SortOption;
+      page?: number;
+    }) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("pageSize");
 
-    if (next.status !== undefined) {
-      if (next.status === "All") {
-        params.delete("status");
-      } else if (next.status === "Active") {
-        params.set("status", "active");
-      } else {
-        params.set("status", next.status);
+      if (next.status !== undefined) {
+        if (next.status === "All") {
+          params.delete("status");
+        } else if (next.status === "Active") {
+          params.set("status", "active");
+        } else {
+          params.set("status", next.status);
+        }
       }
-    }
 
-    if (next.category !== undefined) {
-      if (next.category === "All categories") {
-        params.set("category", ALL_CATEGORIES);
-      } else {
-        params.set("category", next.category);
+      if (next.category !== undefined) {
+        if (next.category === "All categories") {
+          params.set("category", ALL_CATEGORIES);
+        } else {
+          params.set("category", next.category);
+        }
       }
-    }
 
-    if (next.priority !== undefined) {
-      if (next.priority === "All priorities") {
-        params.set("priority", ALL_PRIORITIES);
-      } else {
-        params.set("priority", next.priority);
+      if (next.priority !== undefined) {
+        if (next.priority === "All priorities") {
+          params.set("priority", ALL_PRIORITIES);
+        } else {
+          params.set("priority", next.priority);
+        }
       }
-    }
 
-    if (next.answered !== undefined) {
-      params.set("answered", next.answered);
-    }
-
-    if (next.q !== undefined) {
-      const trimmed = next.q.trim();
-      if (!trimmed) {
-        params.delete("q");
-      } else {
-        params.set("q", trimmed);
+      if (next.answered !== undefined) {
+        params.set("answered", next.answered);
       }
-    }
 
-    if (next.sort !== undefined) {
-      if (next.sort === "newest") {
-        params.delete("sort");
-      } else {
-        params.set("sort", next.sort);
+      if (next.q !== undefined) {
+        const trimmed = next.q.trim();
+        if (!trimmed) {
+          params.delete("q");
+        } else {
+          params.set("q", trimmed);
+        }
       }
-    }
 
-    if (next.page !== undefined) {
-      const safeNextPage = Number.isFinite(next.page)
-        ? Math.max(1, Math.floor(next.page))
-        : 1;
-      if (safeNextPage <= 1) {
-        params.delete("page");
-      } else {
-        params.set("page", String(safeNextPage));
+      if (next.sort !== undefined) {
+        if (next.sort === "newest") {
+          params.delete("sort");
+        } else {
+          params.set("sort", next.sort);
+        }
       }
-    }
 
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, {
-      scroll: false,
-    });
-  };
+      if (next.page !== undefined) {
+        const safeNextPage = Number.isFinite(next.page)
+          ? Math.max(1, Math.floor(next.page))
+          : 1;
+        if (safeNextPage <= 1) {
+          params.delete("page");
+        } else {
+          params.set("page", String(safeNextPage));
+        }
+      }
+
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
+    },
+    [pathname, router, searchParams]
+  );
 
   useEffect(() => {
     if (!isValidAnsweredParam) {
       updateQuery({ answered: ANSWERED_ALL });
     }
-  }, [isValidAnsweredParam]);
+  }, [isValidAnsweredParam, updateQuery]);
 
   useEffect(() => {
     if (!pageFromQuery) {
@@ -421,19 +428,7 @@ export default function TicketsPage() {
     if (Number.isNaN(parsedPage) || parsedPage < 1 || parsedPage > totalPages) {
       updateQuery({ page: currentPage });
     }
-  }, [pageFromQuery, parsedPage, totalPages, currentPage]);
-
-  useEffect(() => {
-    setSelectedIds((prev) => (prev.size ? new Set() : prev));
-  }, [
-    currentPage,
-    activeFilter,
-  categoryFilter,
-  priorityFilter,
-  answeredFilter,
-  searchValue,
-  sortOption,
-]);
+  }, [pageFromQuery, parsedPage, totalPages, currentPage, updateQuery]);
 
   useEffect(() => {
     if (selectedIds.size === 0) return;
@@ -456,14 +451,10 @@ export default function TicketsPage() {
   };
 
   const handleAnsweredChange = (next: AnsweredFilter) => {
-    setAnsweredFilter(next);
     updateQuery({ answered: next, page: 1 });
   };
 
   const handleClearFilters = () => {
-    setCategoryFilter("All categories");
-    setPriorityFilter("All priorities");
-    setAnsweredFilter(ANSWERED_ALL);
     updateQuery({
       status: "All",
       category: "All categories",
@@ -480,17 +471,14 @@ export default function TicketsPage() {
   };
 
   const handleRemoveCategoryFilter = () => {
-    setCategoryFilter("All categories");
     updateQuery({ category: "All categories", page: 1 });
   };
 
   const handleRemovePriorityFilter = () => {
-    setPriorityFilter("All priorities");
     updateQuery({ priority: "All priorities", page: 1 });
   };
 
   const handleRemoveAnsweredFilter = () => {
-    setAnsweredFilter(ANSWERED_ALL);
     updateQuery({ answered: ANSWERED_ALL, page: 1 });
   };
 
@@ -508,7 +496,6 @@ export default function TicketsPage() {
     const value = event.target.value;
     const nextCategory: CategoryFilter =
       value === ALL_CATEGORIES ? "All categories" : (value as TicketCategory);
-    setCategoryFilter(nextCategory);
     updateQuery({ category: nextCategory, page: 1 });
   };
 
@@ -518,7 +505,6 @@ export default function TicketsPage() {
     const value = event.target.value;
     const nextPriority: PriorityFilter =
       value === ALL_PRIORITIES ? "All priorities" : (value as TicketPriority);
-    setPriorityFilter(nextPriority);
     updateQuery({ priority: nextPriority, page: 1 });
   };
 
@@ -582,48 +568,7 @@ export default function TicketsPage() {
 
   const resultsCount = filteredTickets.length;
 
-  const [bulkAiState, setBulkAiState] = useState<{
-    status: "idle" | "running" | "error";
-    total: number;
-    processed: number;
-    success: number;
-    failed: Array<{ id: string; message: string; status?: number }>;
-    skipped: number;
-    globalError?: string | null;
-  }>({
-    status: "idle",
-    total: 0,
-    processed: 0,
-    success: 0,
-    failed: [],
-    skipped: 0,
-    globalError: null,
-  });
-
   const isGenerating = bulkAiState.status === "running";
-
-  const handleResetStatus = () => {
-    updateQuery({ status: "All", page: 1 });
-  };
-
-  const handleResetAnswered = () => {
-    setAnsweredFilter(ANSWERED_ALL);
-    updateQuery({ answered: ANSWERED_ALL, page: 1 });
-  };
-
-  const handleResetCategory = () => {
-    setCategoryFilter("All categories");
-    updateQuery({ category: "All categories", page: 1 });
-  };
-
-  const handleResetPriority = () => {
-    setPriorityFilter("All priorities");
-    updateQuery({ priority: "All priorities", page: 1 });
-  };
-
-  const handleResetSort = () => {
-    updateQuery({ sort: "newest", page: 1 });
-  };
 
   const handleBulkGenerate = async (ticketIds: string[]) => {
     const pendingTickets = ticketIds
@@ -741,6 +686,7 @@ export default function TicketsPage() {
           followUpQuestions: json.followUpQuestions,
           generatedAt: new Date().toISOString(),
           model: "gpt-5-nano",
+          version: 0,
         });
 
         setBulkAiState((prev) => ({
@@ -748,7 +694,7 @@ export default function TicketsPage() {
           processed: prev.processed + 1,
           success: prev.success + 1,
         }));
-      } catch (error) {
+      } catch {
         setBulkAiState((prev) => ({
           ...prev,
           processed: prev.processed + 1,
@@ -1232,7 +1178,6 @@ export default function TicketsPage() {
                       className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ring-offset-white"
                       aria-label={`Filter by priority ${ticket.priority}`}
                       onClick={() => {
-                        setPriorityFilter(ticket.priority);
                         updateQuery({ priority: ticket.priority, page: 1 });
                       }}
                     >
@@ -1319,5 +1264,13 @@ export default function TicketsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TicketsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[320px]" />}>
+      <TicketsPageContent />
+    </Suspense>
   );
 }

@@ -42,6 +42,8 @@ export type Ticket = {
   environment: TicketEnvironment;
   createdAt: string;
   updatedAt: string;
+  answeredAt?: string;
+  resolvedAt?: string;
   aiOutput?: TicketAiOutput;
   aiOutputHistory?: TicketAiOutput[];
 };

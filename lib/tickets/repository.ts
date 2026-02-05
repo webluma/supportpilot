@@ -142,6 +142,8 @@ export function createTicket(input: CreateTicketInput): Ticket {
     environment,
     createdAt: now,
     updatedAt: now,
+    answeredAt: undefined,
+    resolvedAt: undefined,
   };
 
   tickets.unshift(newTicket);

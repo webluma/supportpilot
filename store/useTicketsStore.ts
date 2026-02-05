@@ -29,6 +29,34 @@ type TicketsState = {
 };
 
 const MAX_AI_HISTORY = 5;
+const SETTINGS_STORAGE_KEY = "supportpilot:settings:v1";
+
+const appendAuditToSettings = (eventType: string, detail: string) => {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== "object") return;
+    const currentLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : [];
+    const evt = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      eventType,
+      actor: "You",
+      detail,
+      createdAt: new Date().toISOString(),
+    };
+    const nextLog = [evt, ...currentLog].slice(0, 20);
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ ...parsed, auditLog: nextLog }),
+    );
+  } catch {
+    // fail silently
+  }
+};
 
 export const useTicketsStore = create<TicketsState>()((set, get) => ({
   tickets: [],
@@ -105,6 +133,7 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
   },
   createTicket: (input) => {
     const newTicket = createTicketRecord(input);
+    appendAuditToSettings("ticket.created", `Ticket ${newTicket.id} created`);
     set((state) => ({ tickets: [newTicket, ...state.tickets] }));
     return newTicket;
   },
@@ -122,7 +151,16 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
     return updatedTicket;
   },
   updateTicketStatus: (id, status) => {
-    return get().updateTicket(id, { status });
+    const ticket = get().tickets.find((t) => t.id === id);
+    const patch: Partial<Ticket> = { status };
+    if (status === "Resolved" && !ticket?.resolvedAt) {
+      patch.resolvedAt = new Date().toISOString();
+    }
+    const updated = get().updateTicket(id, patch);
+    if (updated) {
+      appendAuditToSettings("ticket.status_changed", `Ticket ${id} -> ${status}`);
+    }
+    return updated;
   },
   saveAiOutput: (id, output) => {
     const currentTicket = get().tickets.find((ticket) => ticket.id === id);
@@ -136,6 +174,8 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
       0;
     const nextVersion = baseVersion + 1;
     const nextLatest: TicketAiOutput = { ...output, version: nextVersion };
+    const answeredAt =
+      currentTicket.answeredAt ?? nextLatest.generatedAt ?? new Date().toISOString();
 
     const previousOutput = currentTicket.aiOutput;
     const existingHistory = currentTicket.aiOutputHistory ?? [];
@@ -161,6 +201,8 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
       aiOutputHistory: trimmedHistory,
       aiOutputVersionCounter: nextVersion,
       status: "Resolved",
+      answeredAt,
+      resolvedAt: currentTicket.resolvedAt ?? new Date().toISOString(),
     };
 
     const persistedTicket = updateTicketRecord(id, patch);
@@ -182,12 +224,19 @@ export const useTicketsStore = create<TicketsState>()((set, get) => ({
           aiOutputHistory: trimmedHistory,
           aiOutputVersionCounter: nextVersion,
           status: "Resolved",
+          answeredAt,
+          resolvedAt: currentTicket.resolvedAt ?? now,
           updatedAt: now,
         };
         updatedTicket = nextTicket;
         return nextTicket;
       }),
     }));
+
+    if (updatedTicket) {
+      appendAuditToSettings("ai.generated", `AI output for ${id}`);
+      appendAuditToSettings("ticket.status_changed", `Ticket ${id} -> Resolved`);
+    }
 
     return updatedTicket ?? persistedTicket;
   },

@@ -14,17 +14,60 @@ export default function DashboardPage() {
 
   const metrics = useMemo(() => {
     const base = {
+      total: tickets.length,
       open: 0,
-      inProgress: 0,
       resolved: 0,
       pendingAi: 0,
+      avgFirstResponseHrs: 0,
+      avgResolutionHrs: 0,
+      atRisk: 0,
     };
-    tickets.forEach((ticket) => {
-      if (ticket.status === "Open") base.open += 1;
-      if (ticket.status === "In Progress") base.inProgress += 1;
-      if (ticket.status === "Resolved") base.resolved += 1;
-      if (!ticket.aiOutput) base.pendingAi += 1;
+
+    const slaFirstHrs = 4;
+    const slaResolutionHrs = 48;
+
+    let firstResponseSum = 0;
+    let firstResponseCount = 0;
+    let resolutionSum = 0;
+    let resolutionCount = 0;
+
+    const now = Date.now();
+    tickets.forEach((t) => {
+      if (t.status === "Resolved") base.resolved += 1;
+      else base.open += 1;
+      if (!t.aiOutput) base.pendingAi += 1;
+
+      if (t.answeredAt) {
+        const delta = Date.parse(t.answeredAt) - Date.parse(t.createdAt);
+        if (!Number.isNaN(delta) && delta > 0) {
+          firstResponseSum += delta;
+          firstResponseCount += 1;
+        }
+      }
+
+      if (t.resolvedAt) {
+        const delta = Date.parse(t.resolvedAt) - Date.parse(t.createdAt);
+        if (!Number.isNaN(delta) && delta > 0) {
+          resolutionSum += delta;
+          resolutionCount += 1;
+        }
+      }
+
+      const created = Date.parse(t.createdAt);
+      if (!Number.isNaN(created) && t.status !== "Resolved") {
+        const ageHrs = (now - created) / 36e5;
+        const threshold = Math.min(slaFirstHrs, slaResolutionHrs);
+        if (ageHrs > threshold * 0.75) {
+          base.atRisk += 1;
+        }
+      }
     });
+
+    base.avgFirstResponseHrs =
+      firstResponseCount === 0 ? 0 : Number((firstResponseSum / firstResponseCount / 36e5).toFixed(1));
+    base.avgResolutionHrs =
+      resolutionCount === 0 ? 0 : Number((resolutionSum / resolutionCount / 36e5).toFixed(1));
+
     return base;
   }, [tickets]);
 
@@ -43,12 +86,15 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 items-stretch">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 items-stretch">
         {[
+          { label: "Total tickets", value: metrics.total },
           { label: "Open", value: metrics.open },
-          { label: "In Progress", value: metrics.inProgress },
           { label: "Resolved", value: metrics.resolved },
           { label: "Pending AI", value: metrics.pendingAi },
+          { label: "Avg first response (h)", value: metrics.avgFirstResponseHrs },
+          { label: "Avg resolution (h)", value: metrics.avgResolutionHrs },
+          { label: "SLA at risk", value: metrics.atRisk },
         ].map((item) => (
           <Card
             key={item.label}

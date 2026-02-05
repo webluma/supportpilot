@@ -569,31 +569,43 @@ export default function SettingsPage() {
   };
 
   const exportTicketsCsv = () => {
-    const rows = tickets.map((t) => [
-      t.id,
-      t.title,
-      t.status,
-      t.priority,
-      t.category,
-      t.channel,
-      t.createdAt,
-      t.updatedAt,
-    ]);
-    const csv = toCsv(
-      [
-        "id",
-        "title",
-        "status",
-        "priority",
-        "category",
-        "channel",
-        "createdAt",
-        "updatedAt",
-      ],
-      rows
-    );
+    const rows = tickets.map((t) => {
+      const clean = (val?: string) =>
+        (val ?? "").toString().replace(/\s+/g, " ").slice(0, 1000);
+      return [
+        t.id,
+        t.createdAt,
+        t.channel,
+        t.category,
+        t.priority,
+        t.status,
+        t.answeredAt ? "true" : "false",
+        t.answeredAt ?? "",
+        t.resolvedAt ?? "",
+        clean(t.title),
+        clean(t.description),
+        clean(t.aiOutput?.customerReply),
+        clean(t.aiOutput?.qaSummary),
+      ];
+    });
+    const headers = [
+      "id",
+      "createdAt",
+      "channel",
+      "category",
+      "priority",
+      "status",
+      "answered",
+      "answeredAt",
+      "resolvedAt",
+      "title",
+      "description",
+      "aiCustomerReply",
+      "aiQaSummary",
+    ];
+    const csv = toCsv(headers, rows);
     downloadCsv("tickets.csv", csv);
-    const evt = addAudit("export.tickets", "Tickets CSV downloaded");
+    const evt = addAudit("ticket.export_csv", "Tickets CSV downloaded");
     appendAuditOnly(evt, persistSettings, setBaseline, setDraft);
   };
 
@@ -1156,18 +1168,15 @@ const integration = draft.integrations[item.key];
               Data export
             </h2>
             <p className="text-sm text-slate-600">
-              Export tickets and audit log as CSV.
+              Export settings and workspace data for reporting.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={exportSettingsCsv} disabled={loading}>
-              Download settings CSV
+            <Button variant="primary" onClick={exportSettingsJson} disabled={loading}>
+              Download settings JSON
             </Button>
-            <Button variant="primary" onClick={exportTicketsCsv} disabled={loading}>
-              Download tickets CSV
-            </Button>
-            <Button variant="secondary" onClick={exportAuditCsv} disabled={loading}>
-              Download audit log CSV
+            <Button variant="secondary" onClick={exportTicketsCsv} disabled={loading}>
+              Export tickets CSV
             </Button>
           </div>
         </Card>
